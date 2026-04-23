@@ -12,8 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('stock_transactions', function (Blueprint $table) {
+        if (DB::getDriverName() !== 'sqlite') {
             DB::statement("ALTER TABLE `stock_transactions` MODIFY COLUMN `transaction_type` ENUM('Added', 'Deducted', 'Sold', 'Deleted') AFTER `product_id`");
-
+        }
         });
     }
 
