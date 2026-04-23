@@ -64,7 +64,7 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
                 });
             })
             ->when(in_array($sortOrder, ['asc', 'desc']), function ($queryBuilder) use ($sortOrder) {
-                $queryBuilder->orderBy('selling_price', $sortOrder);
+                $queryBuilder->orderBy('retail_price', $sortOrder);
             })
             ->when($stockStatus, function ($queryBuilder) use ($stockStatus) {
                 if ($stockStatus === 'in') {
@@ -116,7 +116,7 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
                 });
             })
             ->when(in_array($sortOrder, ['asc', 'desc']), function ($queryBuilder) use ($sortOrder) {
-                $queryBuilder->orderBy('selling_price', $sortOrder);
+                $queryBuilder->orderBy('retail_price', $sortOrder);
             })
             ->when($stockStatus, function ($queryBuilder) use ($stockStatus) {
                 if ($stockStatus === 'in') {
@@ -205,19 +205,31 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
             'size_id' => 'nullable|exists:sizes,id',
             'color_id' => 'nullable|exists:colors,id',
             'cost_price' => 'nullable|numeric|min:0',
-            'selling_price' => [
+            'retail_price' => [
                 'nullable',
                 'numeric',
                 'min:0',
                 function ($attribute, $value, $fail) use ($request) {
                     if ($value < $request->input('cost_price')) {
-                        $fail('The selling price must be greater than or equal to the cost price.');
+                        $fail('The retail price must be greater than or equal to the cost price.');
                     }
                 },
             ],
-            'discounted_price' => 'nullable|numeric|min:0',
+            'retail_discount' => 'nullable|numeric|min:0|max:100',
+            'discounted_retail_price' => 'nullable|numeric|min:0',
+            'wholesale_price' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($value < $request->input('cost_price')) {
+                        $fail('The wholesale price must be greater than or equal to the cost price.');
+                    }
+                },
+            ],
+            'wholesale_discount' => 'nullable|numeric|min:0|max:100',
+            'discounted_wholesale_price' => 'nullable|numeric|min:0',
             'stock_quantity' => 'nullable|integer|min:0',
-            'discount' => 'nullable|numeric|min:0|max:100',
             'supplier_id' => 'nullable|exists:suppliers,id',
             'barcode' => 'nullable|string|unique:products',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
@@ -287,10 +299,13 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
             'size_id' => 'nullable|exists:sizes,id',
             'color_id' => 'nullable|exists:colors,id',
             'cost_price' => 'nullable|numeric|min:0',
-            'selling_price' => 'nullable|numeric|min:0',
-            'discounted_price' => 'nullable|numeric|min:0',
+            'retail_price' => 'nullable|numeric|min:0',
+            'retail_discount' => 'nullable|numeric|min:0|max:100',
+            'discounted_retail_price' => 'nullable|numeric|min:0',
+            'wholesale_price' => 'nullable|numeric|min:0',
+            'wholesale_discount' => 'nullable|numeric|min:0|max:100',
+            'discounted_wholesale_price' => 'nullable|numeric|min:0',
             'stock_quantity' => 'nullable|integer|min:0',
-            'discount' => 'nullable|numeric|min:0|max:100', // Validation for discount
             'supplier_id' => 'nullable|exists:suppliers,id',
             'image' => 'nullable|max:2048',
             'expire_date' => 'nullable|date',
@@ -416,10 +431,13 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
             'size_id' => 'nullable|exists:sizes,id',
             'color_id' => 'nullable|exists:colors,id',
             'cost_price' => 'numeric|min:0',
-            'selling_price' => 'numeric|min:0',
+            'retail_price' => 'numeric|min:0',
+            'retail_discount' => 'nullable|numeric|min:0|max:100',
+            'discounted_retail_price' => 'nullable|numeric|min:0',
+            'wholesale_price' => 'nullable|numeric|min:0',
+            'wholesale_discount' => 'nullable|numeric|min:0|max:100',
+            'discounted_wholesale_price' => 'nullable|numeric|min:0',
             'stock_quantity' => 'required|integer|min:0',
-            'discounted_price' => 'nullable|numeric|min:0',
-            'discount' => 'nullable|numeric|min:0|max:100',
             'supplier_id' => 'nullable|exists:suppliers,id',
             'image' => 'nullable|max:2048',
             'expire_date' => 'nullable|date',
@@ -482,20 +500,127 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
             'quantity' => 'required|integer|min:1',
             'supplier_id' => 'nullable|exists:suppliers,id',
             'reason' => 'nullable|string|max:255',
+            'cost_price' => 'nullable|numeric|min:0',
+            'retail_price' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($value < $request->input('cost_price', 0)) {
+                        $fail('The retail price must be greater than or equal to the cost price.');
+                    }
+                },
+            ],
+            'retail_discount' => 'nullable|numeric|min:0|max:100',
+            'discounted_retail_price' => 'nullable|numeric|min:0',
+            'wholesale_price' => [
+                'nullable',
+                'numeric',
+                'min:0',
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($value < $request->input('cost_price', 0)) {
+                        $fail('The wholesale price must be greater than or equal to the cost price.');
+                    }
+                },
+            ],
+            'wholesale_discount' => 'nullable|numeric|min:0|max:100',
+            'discounted_wholesale_price' => 'nullable|numeric|min:0',
         ]);
 
         $quantity = $validated['quantity'];
 
-        if ($validated['action'] === 'deduct' && $quantity > $product->stock_quantity) {
-            return redirect()->back()->withErrors(['quantity' => 'Cannot deduct more than available stock.']);
-        }
+        if ($validated['action'] === 'deduct') {
+            if ($quantity > $product->stock_quantity) {
+                return redirect()->back()->withErrors(['quantity' => 'Cannot deduct more than available total stock.']);
+            }
+            
+            // Deduct stock from the latest/first available batch (FIFO logic)
+            $remainingToDeduct = $quantity;
+            $batches = $product->batches()->where('stock_quantity', '>', 0)->orderBy('created_at', 'asc')->get();
+            
+            foreach ($batches as $batch) {
+                if ($remainingToDeduct <= 0) break;
+                
+                if ($batch->stock_quantity >= $remainingToDeduct) {
+                    $batch->stock_quantity -= $remainingToDeduct;
+                    $batch->save();
+                    $remainingToDeduct = 0;
+                } else {
+                    $remainingToDeduct -= $batch->stock_quantity;
+                    $batch->stock_quantity = 0;
+                    $batch->save();
+                }
+            }
 
-        if ($validated['action'] === 'add') {
-            $product->stock_quantity += $quantity;
-            $transactionType = 'Added';
-        } else {
             $product->stock_quantity -= $quantity;
             $transactionType = 'Deducted';
+        } else {
+            // Action is ADD
+            // Check if user provided prices that differ from the main product's prices
+            $pricesChanged = false;
+            
+            // Only check for new prices if they were explicitly provided in the request
+            if ($request->filled('cost_price')) {
+                if (
+                    (float)$validated['cost_price'] !== (float)$product->cost_price ||
+                    (float)$validated['retail_price'] !== (float)$product->retail_price ||
+                    (float)$validated['wholesale_price'] !== (float)$product->wholesale_price
+                ) {
+                    $pricesChanged = true;
+                }
+            }
+
+            if ($pricesChanged) {
+                // Create a NEW batch
+                \App\Models\ProductBatch::create([
+                    'product_id' => $product->id,
+                    'batch_no' => $product->batch_no ? $product->batch_no . '-' . time() : 'B-' . time(),
+                    'stock_quantity' => $quantity,
+                    'cost_price' => $validated['cost_price'],
+                    'retail_price' => $validated['retail_price'],
+                    'retail_discount' => $validated['retail_discount'] ?? 0,
+                    'discounted_retail_price' => $validated['discounted_retail_price'] ?? null,
+                    'wholesale_price' => $validated['wholesale_price'],
+                    'wholesale_discount' => $validated['wholesale_discount'] ?? 0,
+                    'discounted_wholesale_price' => $validated['discounted_wholesale_price'] ?? null,
+                    'expire_date' => $product->expire_date,
+                ]);
+
+                // Update the main product to reflect the latest prices
+                $product->update([
+                    'cost_price' => $validated['cost_price'],
+                    'retail_price' => $validated['retail_price'],
+                    'retail_discount' => $validated['retail_discount'] ?? 0,
+                    'discounted_retail_price' => $validated['discounted_retail_price'] ?? null,
+                    'wholesale_price' => $validated['wholesale_price'],
+                    'wholesale_discount' => $validated['wholesale_discount'] ?? 0,
+                    'discounted_wholesale_price' => $validated['discounted_wholesale_price'] ?? null,
+                ]);
+            } else {
+                // Find the latest batch and add to it
+                $latestBatch = $product->batches()->latest()->first();
+                if ($latestBatch) {
+                    $latestBatch->stock_quantity += $quantity;
+                    $latestBatch->save();
+                } else {
+                    // Fallback if no batches exist (shouldn't happen due to migration)
+                    \App\Models\ProductBatch::create([
+                        'product_id' => $product->id,
+                        'stock_quantity' => $quantity,
+                        'cost_price' => $product->cost_price,
+                        'retail_price' => $product->retail_price,
+                        'retail_discount' => $product->retail_discount,
+                        'discounted_retail_price' => $product->discounted_retail_price,
+                        'wholesale_price' => $product->wholesale_price,
+                        'wholesale_discount' => $product->wholesale_discount,
+                        'discounted_wholesale_price' => $product->discounted_wholesale_price,
+                        'expire_date' => $product->expire_date,
+                    ]);
+                }
+            }
+
+            $product->stock_quantity += $quantity;
+            $transactionType = 'Added';
         }
 
         $product->total_quantity = $product->stock_quantity;
@@ -612,7 +737,10 @@ public function fetchProducts2(Request $request)
         ->where('products.is_promotion', '!=', 1)
         ->with([
         'promotionItems:id,promotion_id,product_id,quantity',
-        'promotionItems.product:id,name'
+        'promotionItems.product:id,name',
+        'batches' => function($q) {
+            $q->where('stock_quantity', '>', 0)->orderBy('created_at', 'asc');
+        }
     ])
         ->when($query, function ($qb) use ($query) {
             $qb->where(function ($sub) use ($query) {
@@ -647,7 +775,7 @@ public function fetchProducts2(Request $request)
 
     // Secondary sort: price or FIFO by created_at
     if (in_array($sortOrder, ['asc', 'desc'])) {
-        $productsQuery->orderBy('products.selling_price', $sortOrder);
+        $productsQuery->orderBy('products.retail_price', $sortOrder);
     } else {
         // FIFO: oldest first within each stock group
         $productsQuery->orderBy('products.created_at', 'desc');
@@ -697,10 +825,13 @@ public function fetchProducts2(Request $request)
         'size_id'           => 'nullable|exists:sizes,id',
         'color_id'          => 'nullable|exists:colors,id',
         'cost_price'        => 'required|numeric|min:0',
-        'selling_price'     => 'required|numeric|min:0',
-        'discounted_price'  => 'nullable|numeric|min:0',
+        'retail_price'      => 'required|numeric|min:0',
+        'retail_discount'   => 'nullable|numeric|min:0|max:100',
+        'discounted_retail_price' => 'nullable|numeric|min:0',
+        'wholesale_price'   => 'nullable|numeric|min:0',
+        'wholesale_discount' => 'nullable|numeric|min:0|max:100',
+        'discounted_wholesale_price' => 'nullable|numeric|min:0',
         'stock_quantity'    => 'required|integer|min:0',
-        'discount'          => 'nullable|numeric|min:0|max:100',
         'supplier_id'       => 'nullable|exists:suppliers,id',
         'barcode'           => ['nullable','string',\Illuminate\Validation\Rule::unique('products','barcode')->whereNull('deleted_at')],
         'image'             => 'nullable|file|image|mimes:jpeg,png,jpg,gif,webp|max:2048',

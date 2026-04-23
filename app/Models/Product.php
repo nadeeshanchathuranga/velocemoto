@@ -16,11 +16,14 @@ class Product extends Model
         'name',
         'code',
         'size_id',
-        'discount',
-        'discounted_price',
         'color_id',
         'cost_price',
-        'selling_price',
+        'retail_price',
+        'retail_discount',
+        'discounted_retail_price',
+        'wholesale_price',
+        'wholesale_discount',
+        'discounted_wholesale_price',
         'stock_quantity',
         'barcode',
         'image',
@@ -41,6 +44,86 @@ class Product extends Model
     //     });
     // }
 
+    /**
+     * Get the effective selling price for a given sale type.
+     *
+     * If a discount exists and a discounted price is stored, use it.
+     * Otherwise fall back to the base price for the requested type.
+     *
+     * @param  string  $type  'retail' or 'wholesale'
+     * @return float
+     */
+    public function getFinalPrice(string $type = 'retail'): float
+    {
+        if ($type === 'wholesale') {
+            if ($this->wholesale_discount > 0 && $this->discounted_wholesale_price > 0) {
+                return (float) $this->discounted_wholesale_price;
+            }
+            return (float) $this->wholesale_price;
+        }
+
+        // Default: retail
+        if ($this->retail_discount > 0 && $this->discounted_retail_price > 0) {
+            return (float) $this->discounted_retail_price;
+        }
+        return (float) $this->retail_price;
+    }
+
+    /**
+     * Get the base (non-discounted) price for a given sale type.
+     *
+     * @param  string  $type  'retail' or 'wholesale'
+     * @return float
+     */
+    public function getBasePrice(string $type = 'retail'): float
+    {
+        return $type === 'wholesale'
+            ? (float) $this->wholesale_price
+            : (float) $this->retail_price;
+    }
+
+    /**
+     * Get the discount percentage for a given sale type.
+     *
+     * @param  string  $type  'retail' or 'wholesale'
+     * @return float
+     */
+    public function getDiscountPercent(string $type = 'retail'): float
+    {
+        return $type === 'wholesale'
+            ? (float) ($this->wholesale_discount ?? 0)
+            : (float) ($this->retail_discount ?? 0);
+    }
+
+    /**
+     * Backward-compatible accessor: returns retail_price when
+     * code still references $product->selling_price.
+     *
+     * @return float
+     */
+    public function getSellingPriceAttribute(): float
+    {
+        return (float) $this->retail_price;
+    }
+
+    /**
+     * Backward-compatible accessor for discount → retail_discount.
+     */
+    public function getDiscountAttribute(): float
+    {
+        return (float) ($this->retail_discount ?? 0);
+    }
+
+    /**
+     * Backward-compatible accessor for discounted_price → discounted_retail_price.
+     */
+    public function getDiscountedPriceAttribute(): ?float
+    {
+        return $this->discounted_retail_price !== null
+            ? (float) $this->discounted_retail_price
+            : null;
+    }
+
     public function category()
     {
         return $this->belongsTo(Category::class, 'category_id','id');
@@ -59,6 +142,11 @@ class Product extends Model
     public function supplier()
     {
         return $this->belongsTo(Supplier::class, 'supplier_id','id');
+    }
+
+    public function batches()
+    {
+        return $this->hasMany(ProductBatch::class, 'product_id');
     }
 
     protected $casts = [

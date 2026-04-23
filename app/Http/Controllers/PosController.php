@@ -60,7 +60,10 @@ class PosController extends Controller
             'barcode' => 'required',
         ]);
 
-        $product = Product::where('barcode', $request->barcode)
+        $product = Product::with(['batches' => function($q) {
+                $q->where('stock_quantity', '>', 0)->orderBy('created_at', 'asc');
+            }])
+            ->where('barcode', $request->barcode)
             ->orWhere('code', $request->barcode)
             ->first();
 
@@ -271,68 +274,46 @@ class PosController extends Controller
     private function resolveReturnUnitPrice(?SaleItem $saleItem, $saleItems): float
     {
         $product = $saleItem?->product;
+        $saleType = $saleItem?->sale_type ?? 'retail';
 
-        if ($product && (float) ($product->discount ?? 0) > 0) {
-            if (!is_null($product->discounted_price) && (float) $product->discounted_price > 0) {
-                return (float) $product->discounted_price;
+        // Try product's current discounted price for the original sale type
+        if ($product && $product->getDiscountPercent($saleType) > 0) {
+            $finalPrice = $product->getFinalPrice($saleType);
+            if ($finalPrice > 0) {
+                return $finalPrice;
             }
-
-            $sellingPrice = (float) ($product->selling_price ?? 0);
-            $discountPercent = (float) $product->discount;
-            return round($sellingPrice - (($sellingPrice * $discountPercent) / 100), 2);
         }
 
+        // Fall back to the actual recorded line-item totals
         if ($saleItems instanceof \Illuminate\Support\Collection && $saleItems->isNotEmpty()) {
             $lineTotal = (float) $saleItems->sum('total_price');
             $lineQty = max(1, (int) $saleItems->sum('quantity'));
             return round($lineTotal / $lineQty, 2);
         }
 
-        return (float) ($saleItem->unit_price ?? optional($product)->selling_price ?? 0);
+        return (float) ($saleItem->unit_price ?? optional($product)->getBasePrice($saleType) ?? 0);
     }
 
     public function submit(Request $request)
     {
-
         if (!Gate::allows('hasRole', ['Admin', 'Cashier'])) {
             abort(403, 'Unauthorized');
         }
-        // Combine countryCode and contactNumber to create the phone field
 
+        // Validate and sanitize the global sale type
+        $saleType = $request->input('sale_type', 'retail');
+        if (!in_array($saleType, ['retail', 'wholesale'])) {
+            $saleType = 'retail';
+        }
 
         $customer = null;
+        $cartItems = $request->input('products');
 
-        $products = $request->input('products');
-        $totalAmount = collect($products)->reduce(function ($carry, $product) {
-            return $carry + ($product['quantity'] * $product['selling_price']);
-        }, 0);
-
-        $totalCost = collect($products)->reduce(function ($carry, $product) {
-            return $carry + ($product['quantity'] * $product['cost_price']);
-        }, 0);
-
-        $productDiscounts = collect($products)->reduce(function ($carry, $product) {
-            if (isset($product['discount']) && $product['discount'] > 0 && isset($product['apply_discount']) && $product['apply_discount'] != false) {
-                $discountAmount = ($product['selling_price'] - $product['discounted_price']) * $product['quantity'];
-                return $carry + $discountAmount;
-            }
-            return $carry;
-        }, 0);
-
-        // Get coupon discount if applied
-        $couponDiscount = isset($request->input('appliedCoupon')['discount']) ?
-            floatval($request->input('appliedCoupon')['discount']) : 0;
-
-
-        // Calculate total combined discount
-        $totalDiscount = $productDiscounts + $couponDiscount ;
-
-        DB::beginTransaction(); // Start a transaction
+        DB::beginTransaction();
 
         try {
-            // Save the customer data to the database
+            // --- Save customer (unchanged) ---
             if ($request->input('customer.contactNumber') || $request->input('customer.name') || $request->input('customer.email')) {
-
                 $phone = $request->input('customer.countryCode') . $request->input('customer.contactNumber');
                 $customer = Customer::where('email', $request->input('customer.email'))->first();
                 $customer1 = Customer::where('phone', $phone)->first();
@@ -352,92 +333,160 @@ class PosController extends Controller
                         'name' => $request->input('customer.name'),
                         'email' => $email,
                         'phone' => $phone,
-                        'address' => $request->input('customer.address', ''), // Optional address
-                        'member_since' => now()->toDateString(), // Current date
-                        'loyalty_points' => 0, // Default value
+                        'address' => $request->input('customer.address', ''),
+                        'member_since' => now()->toDateString(),
+                        'loyalty_points' => 0,
                     ]);
                 }
             }
 
-            // Create the sale record
+            // --- SECURE: Recalculate all totals from the database ---
+            $totalAmount = 0;
+            $totalCost = 0;
+            $productDiscounts = 0;
+            $saleItemsData = [];
+
+            foreach ($cartItems as $cartItem) {
+                $productModel = Product::lockForUpdate()->find($cartItem['id']);
+                if (!$productModel) {
+                    DB::rollBack();
+                    return response()->json(['message' => "Product not found: ID {$cartItem['id']}"], 422);
+                }
+
+                $qty = (int) $cartItem['quantity'];
+                
+                // Determine if a specific batch was selected
+                $batchId = $cartItem['selected_batch_id'] ?? null;
+                $batchModel = null;
+                if ($batchId) {
+                    $batchModel = \App\Models\ProductBatch::lockForUpdate()->find($batchId);
+                }
+
+                $sourceModel = $batchModel ?: $productModel;
+
+                // Validate stock against the specific batch or main product
+                $newStockQuantity = $sourceModel->stock_quantity - $qty;
+
+                // Prevent stock from going negative
+                if ($newStockQuantity < 0) {
+                    DB::rollBack();
+                    $sourceName = $batchModel ? "{$productModel->name} (Batch {$batchModel->batch_no})" : $productModel->name;
+                    return response()->json([
+                        'message' => "Insufficient stock for: {$sourceName} ({$sourceModel->stock_quantity} available)",
+                    ], 423);
+                }
+
+                // Prevent selling expired products
+                $expireDate = $sourceModel->expire_date;
+                if ($expireDate && now()->greaterThan($expireDate)) {
+                    DB::rollBack();
+                    return response()->json([
+                        'message' => "The product '{$productModel->name}' has expired (Expiration Date: {$expireDate->format('Y-m-d')}).",
+                    ], 423);
+                }
+
+                // Get prices from the DB based on sale_type and the source model (Batch or Product)
+                $basePrice = $saleType === 'wholesale' 
+                    ? ($sourceModel->wholesale_price ?: $sourceModel->retail_price ?: 0)
+                    : ($sourceModel->retail_price ?: $sourceModel->selling_price ?: 0);
+                    
+                $discountPercent = $saleType === 'wholesale'
+                    ? ($sourceModel->wholesale_discount ?: 0)
+                    : ($sourceModel->retail_discount ?: $sourceModel->discount ?: 0);
+                    
+                $hasItemDiscount = $discountPercent > 0 && !empty($cartItem['apply_discount']);
+
+                $unitPrice = $basePrice;
+                if ($hasItemDiscount) {
+                    $discountedPrice = $saleType === 'wholesale'
+                        ? $sourceModel->discounted_wholesale_price
+                        : ($sourceModel->discounted_retail_price ?: $sourceModel->discounted_price);
+                        
+                    $unitPrice = $discountedPrice ?: ($basePrice - ($basePrice * ($discountPercent / 100)));
+                }
+
+                $lineDiscount = $hasItemDiscount ? ($basePrice - $unitPrice) * $qty : 0;
+
+                $totalAmount += $qty * $basePrice;
+                $totalCost += $qty * (float) $sourceModel->cost_price;
+                $productDiscounts += $lineDiscount;
+
+                $saleItemsData[] = [
+                    'product_id' => $productModel->id,
+                    'batch_id' => $batchId,
+                    'product_model' => $productModel,
+                    'batch_model' => $batchModel,
+                    'qty' => $qty,
+                    'unit_price' => $unitPrice,
+                    'line_total' => $qty * $unitPrice,
+                    'new_stock' => $newStockQuantity,
+                ];
+            }
+
+            // Get coupon discount if applied
+            $couponDiscount = isset($request->input('appliedCoupon')['discount'])
+                ? floatval($request->input('appliedCoupon')['discount'])
+                : 0;
+
+            $totalDiscount = $productDiscounts + $couponDiscount;
+
+            // Create the sale record with DB-verified totals
             $sale = Sale::create([
-                'customer_id' => $customer ? $customer->id : null, // Nullable customer_id
+                'customer_id' => $customer ? $customer->id : null,
                 'employee_id' => $request->input('employee_id'),
-                'user_id' => $request->input('userId'), // Logged-in user ID
+                'user_id' => $request->input('userId'),
                 'order_id' => $request->input('orderid'),
-                'total_amount' => $totalAmount, // Total amount of the sale
-                'discount' => $totalDiscount, // Default discount to 0 if not provided
+                'total_amount' => $totalAmount,
+                'discount' => $totalDiscount,
                 'total_cost' => $totalCost,
-                'payment_method' => $request->input('paymentMethod'), // Payment method from the request
-                'sale_date' => now()->toDateString(), // Current date
+                'payment_method' => $request->input('paymentMethod'),
+                'sale_date' => now()->toDateString(),
                 'cash' => $request->input('cash'),
                 'custom_discount' => $request->input('custom_discount'),
                 'custom_discount_type' => $request->input('custom_discount_type', 'fixed'),
-
             ]);
 
-            foreach ($products as $product) {
-                // Check stock before saving sale items
-                $productModel = Product::find($product['id']);
-                if ($productModel) {
-                    $hasItemDiscount = isset($product['discount'])
-                        && (float) $product['discount'] > 0
-                        && !empty($product['apply_discount']);
+            // Create sale items and update stock
+            foreach ($saleItemsData as $item) {
+                SaleItem::create([
+                    'sale_id' => $sale->id,
+                    'product_id' => $item['product_id'],
+                    'quantity' => $item['qty'],
+                    'unit_price' => $item['unit_price'],
+                    'total_price' => $item['line_total'],
+                    'sale_type' => $saleType,
+                ]);
 
-                    $unitPrice = $hasItemDiscount
-                        ? (float) ($product['discounted_price'] ?? $product['selling_price'])
-                        : (float) ($product['selling_price'] ?? 0);
+                StockTransaction::create([
+                    'product_id' => $item['product_id'],
+                    'transaction_type' => 'Sold',
+                    'quantity' => $item['qty'],
+                    'transaction_date' => now(),
+                    'supplier_id' => $item['product_model']->supplier_id ?? null,
+                ]);
 
-                    $newStockQuantity = $productModel->stock_quantity - $product['quantity'];
-
-                    // Prevent stock from going negative
-                    if ($newStockQuantity < 0) {
-                        // Rollback transaction and return error
-                        DB::rollBack();
-                        return response()->json([
-                            'message' => "Insufficient stock for product: {$productModel->name}
-                            ({$productModel->stock_quantity} available)",
-                        ], 423);
-                    }
-
-                    if ($productModel->expire_date && now()->greaterThan($productModel->expire_date)) {
-                        // Rollback transaction and return error
-                        DB::rollBack();
-                        return response()->json([
-                            'message' => "The product '{$productModel->name}' has expired (Expiration Date: {$productModel->expire_date->format('Y-m-d')}).",
-                        ], 423); // HTTP 422 Unprocessable Entity
-                    }
-
-                    // Create sale item
-                    SaleItem::create([
-                        'sale_id' => $sale->id,
-                        'product_id' => $product['id'],
-                        'quantity' => $product['quantity'],
-                        'unit_price' => $unitPrice,
-                        'total_price' => (float) $product['quantity'] * $unitPrice,
+                if ($item['batch_model']) {
+                    $item['batch_model']->update([
+                        'stock_quantity' => $item['new_stock']
                     ]);
-
-                    StockTransaction::create([
-                        'product_id' => $product['id'],
-                        'transaction_type' => 'Sold',
-                        'quantity' => $product['quantity'],
-                        'transaction_date' => now(),
-                        'supplier_id' => $productModel->supplier_id ?? null,
+                    $item['product_model']->update([
+                        'stock_quantity' => $item['product_model']->stock_quantity - $item['qty']
                     ]);
-
-                    // Update stock quantity
-                    $productModel->update([
-                        'stock_quantity' => $newStockQuantity,
+                } else {
+                    $item['product_model']->update([
+                        'stock_quantity' => $item['new_stock'],
                     ]);
                 }
+                
+                $item['product_model']->update([
+                    'total_quantity' => $item['product_model']->stock_quantity
+                ]);
             }
 
-            // Commit the transaction
             DB::commit();
 
             return response()->json(['message' => 'Sale recorded successfully!'], 201);
         } catch (\Exception $e) {
-            // Rollback the transaction if any error occurs
             DB::rollBack();
 
             return response()->json([
@@ -445,10 +494,5 @@ class PosController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
-
-        return response()->json([
-            'message' => 'Customer details saved successfully!',
-            'data' => $customer,
-        ], 201);
     }
 }

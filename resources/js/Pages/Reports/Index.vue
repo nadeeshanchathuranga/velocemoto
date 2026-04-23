@@ -109,13 +109,26 @@
 
 
 <!-- KPI Cards (use the same totals the table uses) -->
-<div class="grid w-full md:grid-cols-5 grid-cols-3 gap-4 mb-4">
+<div class="grid w-full md:grid-cols-7 grid-cols-3 gap-4 mb-4">
   <div class="py-6 flex flex-col justify-center items-center border-2 border-[#EC6116] w-full space-y-4 rounded-2xl bg-[#EC611666] shadow-lg hover:-translate-y-1 transition">
-    <div class="flex flex-col items-center justify-center">
+    <div class="flex flex-col items-center justify-center text-center">
       <h2 class="text-xl font-extrabold tracking-wide text-black uppercase">Total Sales</h2>
-      <h2 class="text-xl font-extrabold tracking-wide text-black uppercase">Amount</h2>
     </div>
     <p class="text-2xl font-bold text-black">     {{ salesGrossTotal.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}) }} LKR </p>
+  </div>
+
+  <div class="py-6 flex flex-col justify-center items-center border-2 border-blue-500 w-full space-y-4 rounded-2xl bg-blue-100 shadow-lg hover:-translate-y-1 transition">
+    <div class="flex flex-col items-center justify-center text-center px-2">
+      <h2 class="text-xl font-extrabold tracking-wide text-black uppercase">Retail Sales</h2>
+    </div>
+    <p class="text-2xl font-bold text-black">{{ toMoney(retailGross) }} LKR</p>
+  </div>
+
+  <div class="py-6 flex flex-col justify-center items-center border-2 border-green-500 w-full space-y-4 rounded-2xl bg-green-100 shadow-lg hover:-translate-y-1 transition">
+    <div class="flex flex-col items-center justify-center text-center px-2">
+      <h2 class="text-xl font-extrabold tracking-wide text-black uppercase">Wholesale Sales</h2>
+    </div>
+    <p class="text-2xl font-bold text-black">{{ toMoney(wholesaleGross) }} LKR</p>
   </div>
 
   <div class="py-6 flex flex-col justify-center items-center border-2 border-[#488D3F] w-full space-y-8 rounded-2xl bg-[#488D3F66] shadow-lg hover:-translate-y-1 transition">
@@ -124,19 +137,17 @@
   </div>
 
   <div class="py-6 flex flex-col justify-center items-center border-2 border-[#16D0EC] w-full space-y-4 rounded-2xl bg-[#16D0EC66] shadow-lg hover:-translate-y-1 transition">
-    <h2 class="text-xl font-extrabold tracking-wide text-black uppercase">Total Discount</h2>
+    <h2 class="text-xl font-extrabold tracking-wide text-black uppercase text-center px-2">Total Discount</h2>
     <p class="text-2xl font-bold text-black">{{ toMoney(salesDiscountTotal) }} LKR</p>
   </div>
 
-
-
   <div class="py-6 flex flex-col justify-center items-center border-2 border-[#9E16EC] w-full space-y-4 rounded-2xl bg-[#9E16EC66] shadow-lg hover:-translate-y-1 transition">
-    <h2 class="text-xl font-extrabold tracking-wide text-black uppercase">Number of Transactions</h2>
+    <h2 class="text-xl font-extrabold tracking-wide text-black uppercase text-center px-2">Total Transactions</h2>
     <p class="text-2xl font-bold text-black">{{ totalTransactions }}</p>
   </div>
 
   <div class="py-6 flex flex-col justify-center items-center border-2 border-[#EC16D7] w-full space-y-4 rounded-2xl bg-[#EC16D766] shadow-lg hover:-translate-y-1 transition">
-    <h2 class="text-xl font-extrabold tracking-wide text-black uppercase">Total Number of Customers</h2>
+    <h2 class="text-xl font-extrabold tracking-wide text-black uppercase text-center px-2">Total Customers</h2>
     <p class="text-2xl font-bold text-black">{{ totalCustomer }}</p>
   </div>
 </div>
@@ -411,6 +422,8 @@ const props = defineProps({
   // New clear totals (in LKR)
   totalDiscountLkr: { type: Number, required: true },        // product-level discount total
   totalCustomDiscountLkr: { type: Number, required: true },  // custom discount total after type conversion
+  retailGross: { type: Number, required: true },
+  wholesaleGross: { type: Number, required: true },
 
   totalCustomer: { type: Number, required: true },
   startDate: { type: String, default: "" },
