@@ -67,8 +67,8 @@ class SupplierController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:191|regex:/^[a-zA-Z0-9\s]+$/',
            'contact' => 'required|string|regex:/^\d{10}$/',
-            'email' => 'required|email|regex:/^[\w\.-]+@[a-zA-Z0-9\.-]+\.[a-zA-Z]{2,6}$/|max:255|unique:suppliers,email',
-            'address' => 'required|string|max:500',
+            'email' => 'nullable|email|regex:/^[\w\.-]+@[a-zA-Z0-9\.-]+\.[a-zA-Z]{2,6}$/|max:255|unique:suppliers,email',
+            'address' => 'nullable|string|max:500',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:1024',
         ]);
 
