@@ -18,8 +18,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use Illuminate\Validation\ValidationException;
 
 class PosController extends Controller
 {
@@ -30,12 +30,47 @@ class PosController extends Controller
         }
 
         $allcategories = Category::with('parent')->get()->map(function ($category) {
-            $category->hierarchy_string = $category->hierarchy_string; // Access it
             return $category;
         });
         $colors = Color::orderBy('created_at', 'desc')->get();
         $sizes = Size::orderBy('created_at', 'desc')->get();
         $allemployee = Employee::orderBy('created_at', 'desc')->get();
+
+        $initialProducts = [];
+        $loadedSale = null;
+        $loadedSaleDue = 0;
+        if ($request->filled('credit_sale_id')) {
+            $loadedSale = Sale::with(['saleItems.product', 'payments', 'customer'])
+                ->where('is_credit', true)
+                ->where('status', 'Open')
+                ->find($request->query('credit_sale_id'));
+
+            if ($loadedSale) {
+                $paidAmount = (float) $loadedSale->paid_amount;
+                $loadedSaleDue = max(0, (float) ($loadedSale->balance_due ?? ((float) $loadedSale->total_amount - $paidAmount)));
+                $initialProducts = $loadedSale->saleItems->map(function ($item) {
+                    $product = $item->product;
+                    return [
+                        'id' => $product->id,
+                        'name' => $product->name,
+                        'image' => $product->image,
+                        'quantity' => $item->quantity,
+                        'unit_price' => $item->unit_price,
+                        'selling_price' => $item->unit_price,
+                        'selected_batch_id' => $item->batch_id,
+                        'batches' => [],
+                        'apply_discount' => false,
+                        'is_promotion' => $product->is_promotion ?? 0,
+                        'retail_price' => $product->retail_price,
+                        'wholesale_price' => $product->wholesale_price,
+                        'retail_discount' => $product->retail_discount,
+                        'discount' => $product->discount,
+                        'discounted_retail_price' => $product->discounted_retail_price,
+                        'stock_quantity' => $product->stock_quantity,
+                    ];
+                })->toArray();
+            }
+        }
 
 
         // Render the page for GET requests
@@ -47,6 +82,9 @@ class PosController extends Controller
             'allemployee' => $allemployee,
             'colors' => $colors,
             'sizes' => $sizes,
+             'initialProducts' => $initialProducts,
+             'loadedSale' => $loadedSale,
+             'loadedSaleDue' => $loadedSaleDue,
         ]);
     }
 
@@ -114,15 +152,15 @@ class PosController extends Controller
             abort(403, 'Unauthorized');
         }
 
-        $saleItems = SaleItem::with('product')
-            ->where('sale_id', $sale->id)
+                $saleItems = SaleItem::with('product')
+                    ->where('sale_id', $sale->getKey())
             ->get();
 
         $grouped = $saleItems
             ->groupBy('product_id')
             ->map(function ($items, $productId) use ($sale) {
                 $soldQuantity = (int) $items->sum('quantity');
-                $returnedQuantity = (int) ReturnItem::where('sale_id', $sale->id)
+                $returnedQuantity = (int) ReturnItem::where('sale_id', $sale->getKey())
                     ->where('product_id', $productId)
                     ->sum('quantity');
                 $availableQuantity = max(0, $soldQuantity - $returnedQuantity);
@@ -179,11 +217,11 @@ class PosController extends Controller
                 $returnQty = (int) $returnItemData['quantity'];
                 $reason = $returnItemData['reason'] ?? null;
 
-                $soldQty = (int) SaleItem::where('sale_id', $sale->id)
+                $soldQty = (int) SaleItem::where('sale_id', $sale->getKey())
                     ->where('product_id', $productId)
                     ->sum('quantity');
 
-                $alreadyReturnedQty = (int) ReturnItem::where('sale_id', $sale->id)
+                $alreadyReturnedQty = (int) ReturnItem::where('sale_id', $sale->getKey())
                     ->where('product_id', $productId)
                     ->sum('quantity');
 
@@ -195,7 +233,7 @@ class PosController extends Controller
                     ]);
                 }
 
-                $saleItems = SaleItem::where('sale_id', $sale->id)
+                $saleItems = SaleItem::where('sale_id', $sale->getKey())
                     ->where('product_id', $productId)
                     ->get();
 
@@ -205,12 +243,12 @@ class PosController extends Controller
                 $refundTotal += $refundAmount;
 
                 ReturnItem::create([
-                    'sale_id' => $sale->id,
+                    'sale_id' => $sale->getKey(),
                     'customer_id' => $sale->customer_id,
                     'product_id' => $productId,
                     'quantity' => $returnQty,
                     'reason' => $reason ?: 'Customer return',
-                    'return_date' => now()->toDateString(),
+                    'return_date' => date('Y-m-d'),
                 ]);
 
                 $product = Product::lockForUpdate()->find($productId);
@@ -243,10 +281,10 @@ class PosController extends Controller
 
             if ($validated['refund_method'] !== 'Exchange') {
                 Payment::create([
-                    'sale_id' => $sale->id,
+                    'sale_id' => $sale->getKey(),
                     'amount' => -1 * round($refundTotal, 2),
                     'method' => $paymentMethodMap[$validated['refund_method']] ?? 'Cash',
-                    'payment_date' => now()->toDateString(),
+                    'payment_date' => date('Y-m-d'),
                 ]);
             }
 
@@ -300,11 +338,35 @@ class PosController extends Controller
             abort(403, 'Unauthorized');
         }
 
-        // Validate and sanitize the global sale type
         $saleType = $request->input('sale_type', 'retail');
         if (!in_array($saleType, ['retail', 'wholesale'])) {
             $saleType = 'retail';
         }
+
+        $request->validate([
+            'sale_id' => 'nullable|exists:sales,id',
+            'cash' => 'nullable|numeric|min:0',
+            'is_credit' => 'nullable|boolean',
+        ]);
+
+        $paymentMethodMap = [
+            'cash' => 'Cash',
+            'card' => 'Card',
+            'online' => 'Online',
+        ];
+
+        $paymentRecordMethodMap = [
+            'cash' => 'Cash',
+            'card' => 'Credit Card',
+            'online' => 'Online',
+        ];
+
+        $paymentMethodKey = strtolower($request->input('paymentMethod', 'cash'));
+        $paymentMethod = $paymentMethodMap[$paymentMethodKey] ?? 'Cash';
+        $paymentRecordMethod = $paymentRecordMethodMap[$paymentMethodKey] ?? 'Cash';
+        $isCredit = filter_var($request->input('is_credit', false), FILTER_VALIDATE_BOOLEAN);
+        $paymentAmount = (float) $request->input('cash', 0);
+        $saleId = $request->input('sale_id');
 
         $customer = null;
         $cartItems = $request->input('products');
@@ -312,7 +374,66 @@ class PosController extends Controller
         DB::beginTransaction();
 
         try {
-            // --- Save customer (unchanged) ---
+            if ($saleId) {
+                $existingSale = Sale::find($saleId);
+                if (!$existingSale) {
+                    DB::rollBack();
+                    return response()->json(['message' => 'Credit sale not found.'], 404);
+                }
+
+                if ($existingSale->status !== 'Open' || $existingSale->is_credit === false) {
+                    DB::rollBack();
+                    return response()->json(['message' => 'This credit bill is no longer active.'], 422);
+                }
+
+                if ($paymentAmount <= 0) {
+                    DB::rollBack();
+                    return response()->json(['message' => 'Please enter the payment amount.'], 422);
+                }
+
+                $dueAmount = max(0, (float) ($existingSale->balance_due ?? ((float) $existingSale->total_amount - (float) $existingSale->paid_amount)));
+                if ($paymentAmount > $dueAmount) {
+                    DB::rollBack();
+                    return response()->json(['message' => 'Payment amount cannot be greater than remaining balance.'], 422);
+                }
+
+                if (!$isCredit && $paymentAmount < $dueAmount) {
+                    DB::rollBack();
+                    return response()->json(['message' => 'Unchecking credit requires full settlement of the remaining balance.'], 422);
+                }
+
+                $newPaidAmount = (float) $existingSale->paid_amount + $paymentAmount;
+                $newBalanceDue = max(0, (float) $existingSale->total_amount - $newPaidAmount);
+
+                $existingSale->paid_amount = $newPaidAmount;
+                $existingSale->balance_due = $newBalanceDue;
+                $existingSale->payment_method = $paymentMethod;
+
+                if ($newBalanceDue <= 0) {
+                    // Finalize the credit bill and mark it as closed in credit management.
+                    $existingSale->is_credit = true;
+                    $existingSale->status = 'Closed';
+                    $existingSale->closing_date = date('Y-m-d');
+                } else {
+                    // Keep the bill open as a pending credit payment.
+                    $existingSale->is_credit = true;
+                    $existingSale->status = 'Open';
+                    $existingSale->closing_date = null;
+                }
+
+                $existingSale->save();
+
+                Payment::create([
+                    'sale_id' => $existingSale->id,
+                    'amount' => round($paymentAmount, 2),
+                    'method' => $paymentRecordMethod,
+                    'payment_date' => date('Y-m-d'),
+                ]);
+
+                DB::commit();
+                return response()->json(['message' => 'Payment recorded successfully!'], 201);
+            }
+
             if ($request->input('customer.contactNumber') || $request->input('customer.name') || $request->input('customer.email')) {
                 $phone = $request->input('customer.countryCode') . $request->input('customer.contactNumber');
                 $customer = Customer::where('email', $request->input('customer.email'))->first();
@@ -334,13 +455,17 @@ class PosController extends Controller
                         'email' => $email,
                         'phone' => $phone,
                         'address' => $request->input('customer.address', ''),
-                        'member_since' => now()->toDateString(),
+                        'member_since' => date('Y-m-d'),
                         'loyalty_points' => 0,
                     ]);
                 }
             }
 
-            // --- SECURE: Recalculate all totals from the database ---
+            if ($isCredit && (empty(trim($request->input('customer.name'))) || empty(trim($request->input('customer.contactNumber'))))) {
+                DB::rollBack();
+                return response()->json(['message' => 'Customer name and contact number are required for credit bills.'], 422);
+            }
+
             $totalAmount = 0;
             $totalCost = 0;
             $productDiscounts = 0;
@@ -354,8 +479,6 @@ class PosController extends Controller
                 }
 
                 $qty = (int) $cartItem['quantity'];
-                
-                // Determine if a specific batch was selected
                 $batchId = $cartItem['selected_batch_id'] ?? null;
                 $batchModel = null;
                 if ($batchId) {
@@ -363,11 +486,8 @@ class PosController extends Controller
                 }
 
                 $sourceModel = $batchModel ?: $productModel;
-
-                // Validate stock against the specific batch or main product
                 $newStockQuantity = $sourceModel->stock_quantity - $qty;
 
-                // Prevent stock from going negative
                 if ($newStockQuantity < 0) {
                     DB::rollBack();
                     $sourceName = $batchModel ? "{$productModel->name} (Batch {$batchModel->batch_no})" : $productModel->name;
@@ -376,24 +496,28 @@ class PosController extends Controller
                     ], 423);
                 }
 
-                // Prevent selling expired products
                 $expireDate = $sourceModel->expire_date;
-                if ($expireDate && now()->greaterThan($expireDate)) {
-                    DB::rollBack();
-                    return response()->json([
-                        'message' => "The product '{$productModel->name}' has expired (Expiration Date: {$expireDate->format('Y-m-d')}).",
-                    ], 423);
+                if ($expireDate !== null) {
+                    $timestamp = is_numeric($expireDate)
+                        ? (int) $expireDate
+                        : strtotime((string) $expireDate);
+
+                    if ($timestamp !== false && time() > $timestamp) {
+                        DB::rollBack();
+                        return response()->json([
+                            'message' => "The product '{$productModel->name}' has expired (Expiration Date: " . date('Y-m-d', $timestamp) . ").",
+                        ], 423);
+                    }
                 }
 
-                // Get prices from the DB based on sale_type and the source model (Batch or Product)
-                $basePrice = $saleType === 'wholesale' 
+                $basePrice = $saleType === 'wholesale'
                     ? ($sourceModel->wholesale_price ?: $sourceModel->retail_price ?: 0)
                     : ($sourceModel->retail_price ?: $sourceModel->selling_price ?: 0);
-                    
+
                 $discountPercent = $saleType === 'wholesale'
                     ? ($sourceModel->wholesale_discount ?: 0)
                     : ($sourceModel->retail_discount ?: $sourceModel->discount ?: 0);
-                    
+
                 $hasItemDiscount = $discountPercent > 0 && !empty($cartItem['apply_discount']);
 
                 $unitPrice = $basePrice;
@@ -401,12 +525,11 @@ class PosController extends Controller
                     $discountedPrice = $saleType === 'wholesale'
                         ? $sourceModel->discounted_wholesale_price
                         : ($sourceModel->discounted_retail_price ?: $sourceModel->discounted_price);
-                        
+
                     $unitPrice = $discountedPrice ?: ($basePrice - ($basePrice * ($discountPercent / 100)));
                 }
 
                 $lineDiscount = $hasItemDiscount ? ($basePrice - $unitPrice) * $qty : 0;
-
                 $totalAmount += $qty * $basePrice;
                 $totalCost += $qty * (float) $sourceModel->cost_price;
                 $productDiscounts += $lineDiscount;
@@ -423,14 +546,17 @@ class PosController extends Controller
                 ];
             }
 
-            // Get coupon discount if applied
+            if (!$isCredit && $paymentMethod === 'Cash' && $paymentAmount < $totalAmount) {
+                DB::rollBack();
+                return response()->json(['message' => 'Cash payment must cover the order total unless Credit is selected.'], 422);
+            }
+
             $couponDiscount = isset($request->input('appliedCoupon')['discount'])
                 ? floatval($request->input('appliedCoupon')['discount'])
                 : 0;
 
             $totalDiscount = $productDiscounts + $couponDiscount;
 
-            // Create the sale record with DB-verified totals
             $sale = Sale::create([
                 'customer_id' => $customer ? $customer->id : null,
                 'employee_id' => $request->input('employee_id'),
@@ -439,17 +565,30 @@ class PosController extends Controller
                 'total_amount' => $totalAmount,
                 'discount' => $totalDiscount,
                 'total_cost' => $totalCost,
-                'payment_method' => $request->input('paymentMethod'),
-                'sale_date' => now()->toDateString(),
-                'cash' => $request->input('cash'),
+                'payment_method' => $paymentMethod,
+                        'sale_date' => date('Y-m-d'),
+                'cash' => $paymentAmount,
                 'custom_discount' => $request->input('custom_discount'),
                 'custom_discount_type' => $request->input('custom_discount_type', 'fixed'),
+                'status' => ($isCredit || $paymentAmount < $totalAmount) ? 'Open' : 'Complete',
+                'is_credit' => ($isCredit || $paymentAmount < $totalAmount),
+                'paid_amount' => $paymentAmount,
+                'balance_due' => max(0, $totalAmount - $paymentAmount),
+                        'closing_date' => ($isCredit || $paymentAmount < $totalAmount) ? null : date('Y-m-d'),
             ]);
 
-            // Create sale items and update stock
+            if ($paymentAmount > 0) {
+                Payment::create([
+                    'sale_id' => $sale->getKey(),
+                    'amount' => round($paymentAmount, 2),
+                    'method' => $paymentRecordMethod,
+                    'payment_date' => date('Y-m-d'),
+                ]);
+            }
+
             foreach ($saleItemsData as $item) {
                 SaleItem::create([
-                    'sale_id' => $sale->id,
+                    'sale_id' => $sale->getKey(),
                     'product_id' => $item['product_id'],
                     'quantity' => $item['qty'],
                     'unit_price' => $item['unit_price'],
@@ -477,7 +616,7 @@ class PosController extends Controller
                         'stock_quantity' => $item['new_stock'],
                     ]);
                 }
-                
+
                 $item['product_model']->update([
                     'total_quantity' => $item['product_model']->stock_quantity
                 ]);

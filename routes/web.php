@@ -23,10 +23,10 @@ use App\Http\Controllers\ChequeController;
 use App\Http\Controllers\SupplierPaymentController;
 use App\Http\Controllers\TransactionHistoryController;
 use App\Http\Controllers\ManualPosController;
-use Illuminate\Foundation\Application;
+use App\Http\Controllers\CreditBillController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 use Illuminate\Support\Facades\Gate;
+use Inertia\Inertia;
 
 
 /*
@@ -49,7 +49,7 @@ use Illuminate\Support\Facades\Gate;
 //     ]);
 // });
 Route::get('/dashboard', function () {
-    return Inertia::location(route('dashboard'));
+    return redirect()->route('dashboard');
 });
 
 Route::middleware([
@@ -63,7 +63,17 @@ Route::middleware([
             return redirect()->route('pos.index');
         }
 
-        return Inertia::render('Dashboard');
+        $pendingCreditBills = \App\Models\Sale::query()
+            ->where('is_credit', true)
+            ->where('status', 'Open');
+
+        $advancePaymentsTotal = (float) $pendingCreditBills->sum('paid_amount');
+        $totalCreditAmount = (float) $pendingCreditBills->sum('balance_due');
+
+        return Inertia::render('Dashboard', [
+            'advancePaymentsTotal' => round($advancePaymentsTotal, 2),
+            'totalCreditAmount' => round($totalCreditAmount, 2),
+        ]);
 
     })->name('dashboard');
 });
@@ -94,6 +104,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/pos/returns/orders/{sale}/items', [PosController::class, 'getReturnOrderItems'])->name('pos.return.items');
     Route::post('/pos/returns/submit', [PosController::class, 'submitReturn'])->name('pos.return.submit');
     Route::post('/pos/submit', [PosController::class, 'submit'])->name('pos.checkout');
+    Route::get('/credit-bills', [CreditBillController::class, 'index'])->name('creditBills.index');
     Route::resource('payment', PaymentController::class);
     Route::resource('reports', ReportController::class);
     Route::get('/batch-management/search', [ReportController::class, 'searchByCode']);

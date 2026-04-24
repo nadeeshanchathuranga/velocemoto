@@ -99,6 +99,22 @@ const props = defineProps({
         type: String,
         default: "cash",
     },
+    isCreditBill: {
+        type: Boolean,
+        default: false,
+    },
+    previouslyPaid: {
+        type: [Number, String],
+        default: 0,
+    },
+    currentPaid: {
+        type: [Number, String],
+        default: 0,
+    },
+    remainingBalance: {
+        type: [Number, String],
+        default: 0,
+    },
     saleType: {
         type: String,
         default: "retail",
@@ -126,6 +142,17 @@ const paymentMethodLabel = computed(() => {
         return "Online";
     }
     return "Cash";
+});
+
+const receiptStatus = computed(() => {
+    const remaining = Number(props.remainingBalance || 0);
+    return remaining <= 0 ? 'Closed' : 'Open';
+});
+
+const showCreditBillReceipt = computed(() => {
+    const advancePaid = Number(props.previouslyPaid || 0);
+    const remaining = Number(props.remainingBalance || 0);
+    return Boolean(props.isCreditBill) || (advancePaid > 0 && remaining <= 0);
 });
 
 const isCashPayment = computed(() => paymentMethodLabel.value === "Cash");
@@ -386,6 +413,18 @@ const productRows = props.products
                       <small>${props.cashier.name}</small>
                   </div>
               </div>
+            ${showCreditBillReceipt.value ? `
+            <div class="info-row">
+                <div>
+                    <p>Invoice Type:</p>
+                    <small>CREDIT BILL</small>
+                </div>
+                <div>
+                    <p>Status:</p>
+                    <small>${receiptStatus.value}</small>
+                </div>
+            </div>
+            ` : ``}
               ${props.isReturnExchange ? `
               <div class="info-row">
                   <div>
@@ -457,27 +496,40 @@ const productRows = props.products
                   <span>Payment Method</span>
                   <span>${paymentMethodLabel.value}</span>
               </div>
-              ${isCashPayment.value ? `
+              ${showCreditBillReceipt.value ? `
+              <div>
+                  <span>Total Bill Amount</span>
+                  <span>${(Number(props.total) || 0).toFixed(2)} LKR</span>
+              </div>
+              ${(Number(props.previouslyPaid) || 0) > 0 ? `
+              <div>
+                  <span>Advance Payment</span>
+                  <span>${(Number(props.previouslyPaid) || 0).toFixed(2)} LKR</span>
+              </div>
+              ` : ''}
+              <div>
+                  <span>Current Paid</span>
+                  <span>${(Number(props.currentPaid) || 0).toFixed(2)} LKR</span>
+              </div>
+              <div style="font-weight:bold;">
+                  <span>Remaining Balance</span>
+                  <span>${(Number(props.remainingBalance) || 0).toFixed(2)} LKR</span>
+              </div>
+              ` : `
               <div>
                   <span>Cash</span>
                   <span>${(Number(props.cash) || 0).toFixed(2)} LKR</span>
               </div>
               <div style="font-weight: bold;">
                   <span>Balance</span>
-                  <span>${(Number(props.balance) || 0).toFixed(2)} LKR</span>
+                  <span>${Math.max(0, Number(props.balance) || 0).toFixed(2)} LKR</span>
               </div>
-              ` : ``}
-          </div>
-          <div class="footer">
-
-              <p>THANK YOU COME AGAIN</p>
-
-               <p style="font-weight: bold;">Powered by JAAN Network Ltd.</p>
-               <p>${new Date().toLocaleTimeString()} </p>
+              `}
           </div>
       </div>
-  </body>
-  </html>
+    </div>
+    </body>
+    </html>
   `;
 
     // Open a new window
@@ -497,6 +549,7 @@ const productRows = props.products
         printWindow.focus();
         printWindow.print();
         printWindow.close();
+        emit('update:open', false);
     };
 };
 </script>

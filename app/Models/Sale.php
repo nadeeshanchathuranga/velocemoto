@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Payment;
 
 class Sale extends Model
 {
@@ -22,6 +23,11 @@ class Sale extends Model
         'cash',
         'custom_discount',
         'custom_discount_type',
+        'status',
+        'is_credit',
+        'paid_amount',
+        'balance_due',
+        'closing_date',
     ];
 
 
@@ -49,6 +55,11 @@ class Sale extends Model
     public function customer()
     {
         return $this->belongsTo(Customer::class, 'customer_id','id');
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class, 'sale_id', 'id');
     }
 
     public function user()

@@ -1,13 +1,10 @@
 <?php
 
 namespace App\Http\Controllers;
-use Carbon\Carbon;
+
 use App\Models\Product;
 use App\Models\Report;
 use App\Models\Sale;
-use App\Models\SaleItem;
-use App\Models\StockTransaction;
-use DateTime;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -17,143 +14,120 @@ class ReportController extends Controller
     /**
      * Display a listing of the resource.
      */
-
-
-
-
- public function index(Request $request)
-{
-    if (!Gate::allows('hasRole', ['Admin'])) {
-        abort(403, 'Unauthorized');
-    }
-
-    // Dates (normalize to day bounds)
-    $startDateRaw = $request->input('start_date');
-    $endDateRaw   = $request->input('end_date');
-
-    $from = $startDateRaw ? Carbon::parse($startDateRaw)->startOfDay() : null;
-    $to   = $endDateRaw   ? Carbon::parse($endDateRaw)->endOfDay()     : null;
-
-    // Reusable created_at window
-    $applyCreatedWindow = function ($q) use ($from, $to) {
-        if ($from && $to) {
-            $q->whereBetween('created_at', [$from, $to]);
-        } elseif ($from) {
-            $q->where('created_at', '>=', $from);
-        } elseif ($to) {
-            $q->where('created_at', '<=', $to);
+    public function index(Request $request)
+    {
+        if (!Gate::allows('hasRole', ['Admin'])) {
+            abort(403, 'Unauthorized');
         }
-    };
 
-    // -------- Sales (filter by created_at) --------
-    $salesQuery = Sale::with(['saleItems.product.category', 'employee', 'customer']);
+        $startDateRaw = $request->input('start_date');
+        $endDateRaw = $request->input('end_date');
 
-    if ($from || $to) {
-        $applyCreatedWindow($salesQuery);
-    }
+        $from = $startDateRaw ?: null;
+        $to = $endDateRaw ?: null;
 
-    $sales = $salesQuery->orderBy('created_at', 'desc')->get();
+        $applyCreatedWindow = function ($q) use ($from, $to) {
+            if ($from && $to) {
+                $q->whereDate('created_at', '>=', $from)
+                  ->whereDate('created_at', '<=', $to);
+            } elseif ($from) {
+                $q->whereDate('created_at', '>=', $from);
+            } elseif ($to) {
+                $q->whereDate('created_at', '<=', $to);
+            }
+        };
 
-    // Helpers
-    $customDiscountToLkr = function ($sale) {
-        $gross = (float) ($sale->total_amount ?? 0);
-        $val   = (float) ($sale->custom_discount ?? 0);
-        $type  = $sale->custom_discount_type ?? 'fixed';
-        return $type === 'percent' ? ($gross * $val / 100.0) : $val;
-    };
+        $salesQuery = Sale::with(['saleItems.product.category', 'employee', 'customer'])
+            ->where('status', '!=', 'Open');
 
-    // Category and Channel totals (from filtered sales)
-    $categorySales = [];
-    $retailGross = 0;
-    $wholesaleGross = 0;
+        $pendingCreditQuery = Sale::where('is_credit', true)
+            ->where('status', 'Open');
 
-    foreach ($sales as $sale) {
-        foreach ($sale->saleItems as $item) {
-            $categoryName = $item->product->category->name ?? 'No Category';
-            $categorySales[$categoryName] = ($categorySales[$categoryName] ?? 0) + (float) $item->total_price;
+        if ($from || $to) {
+            $applyCreatedWindow($salesQuery);
+            $applyCreatedWindow($pendingCreditQuery);
+        }
 
-            // Calculate channel breakdown based on sale_type
-            // PosController stores unit_price as the final price after product discounts
-            if ($item->sale_type === 'wholesale') {
-                $wholesaleGross += (float) $item->total_price;
-            } else {
-                $retailGross += (float) $item->total_price;
+        $sales = $salesQuery->orderBy('created_at', 'desc')->get();
+
+        $totalCreditBillOutstanding = (float) $pendingCreditQuery->sum('balance_due');
+        $totalAdvancePayments = (float) $pendingCreditQuery->sum('paid_amount');
+
+        $customDiscountToLkr = function ($sale) {
+            $gross = (float) ($sale->total_amount ?? 0);
+            $val = (float) ($sale->custom_discount ?? 0);
+            $type = $sale->custom_discount_type ?? 'fixed';
+            return $type === 'percent' ? ($gross * $val / 100.0) : $val;
+        };
+
+        $categorySales = [];
+        $retailGross = 0;
+        $wholesaleGross = 0;
+
+        foreach ($sales as $sale) {
+            foreach ($sale->saleItems as $item) {
+                $categoryName = $item->product->category->name ?? 'No Category';
+                $categorySales[$categoryName] = ($categorySales[$categoryName] ?? 0) + (float) $item->total_price;
+
+                if ($item->sale_type === 'wholesale') {
+                    $wholesaleGross += (float) $item->total_price;
+                } else {
+                    $retailGross += (float) $item->total_price;
+                }
             }
         }
+
+        $paymentMethodTotals = $sales->groupBy('payment_method')->map(
+            fn($g) => (float) $g->sum('total_amount')
+        )->toArray();
+
+        $employeeSalesSummary = [];
+        foreach ($sales as $sale) {
+            if (!$sale->employee) {
+                continue;
+            }
+            $name = $sale->employee->name;
+            $employeeSalesSummary[$name] ??= [
+                'Employee Name' => $name,
+                'Total Sales Amount' => 0,
+            ];
+            $gross = (float) ($sale->total_amount ?? 0);
+            $prodDisc = (float) ($sale->discount ?? 0);
+            $customDisc = $customDiscountToLkr($sale);
+            $employeeSalesSummary[$name]['Total Sales Amount'] += ($gross - $prodDisc - $customDisc);
+        }
+
+        $totalSaleAmount = (float) $sales->sum('total_amount');
+        $totalCost = (float) $sales->sum('total_cost');
+        $totalProductDiscountLkr = (float) $sales->sum('discount');
+        $totalCustomDiscountLkr = (float) $sales->reduce(fn($c, $s) => $c + $customDiscountToLkr($s), 0.0);
+        $netProfit = $totalSaleAmount - $totalCost - ($totalProductDiscountLkr + $totalCustomDiscountLkr);
+        $totalTransactions = $sales->count();
+        $averageTransactionValue = $totalTransactions > 0 ? ($totalSaleAmount / $totalTransactions) : 0;
+        $totalCustomer = (clone $salesQuery)->distinct('customer_id')->count('customer_id');
+
+        return Inertia::render('Reports/Index', [
+            'sales' => $sales,
+            'totalSaleAmount' => round($totalSaleAmount, 2),
+            'totalDiscountLkr' => round($totalProductDiscountLkr, 2),
+            'totalCustomDiscountLkr' => round($totalCustomDiscountLkr, 2),
+            'netProfit' => round($netProfit, 2),
+            'totalTransactions' => $totalTransactions,
+            'averageTransactionValue' => round($averageTransactionValue, 2),
+            'totalCustomer' => $totalCustomer,
+            'startDate' => $startDateRaw,
+            'endDate' => $endDateRaw,
+            'categorySales' => $categorySales,
+            'employeeSalesSummary' => $employeeSalesSummary,
+            'paymentMethodTotals' => $paymentMethodTotals,
+            'retailGross' => round($retailGross, 2),
+            'wholesaleGross' => round($wholesaleGross, 2),
+            'totalCreditBillOutstanding' => round($totalCreditBillOutstanding, 2),
+            'totalAdvancePayments' => round($totalAdvancePayments, 2),
+        ]);
     }
-
-    // Payment totals (gross)
-    $paymentMethodTotals = $sales->groupBy('payment_method')->map(
-        fn($g) => (float) $g->sum('total_amount')
-    )->toArray();
-
-    // Employee sales (NET)
-    $employeeSalesSummary = [];
-    foreach ($sales as $sale) {
-        if (!$sale->employee) continue;
-        $name = $sale->employee->name;
-        $employeeSalesSummary[$name] ??= [
-            'Employee Name' => $name,
-            'Total Sales Amount' => 0,
-        ];
-        $gross       = (float) ($sale->total_amount ?? 0);
-        $prodDisc    = (float) ($sale->discount ?? 0);
-        $customDisc  = $customDiscountToLkr($sale);
-        $employeeSalesSummary[$name]['Total Sales Amount'] += ($gross - $prodDisc - $customDisc);
-    }
-
-    // Overall stats
-    $totalSaleAmount         = (float) $sales->sum('total_amount');
-    $totalCost               = (float) $sales->sum('total_cost');
-    $totalProductDiscountLkr = (float) $sales->sum('discount');
-    $totalCustomDiscountLkr  = (float) $sales->reduce(fn($c, $s) => $c + $customDiscountToLkr($s), 0.0);
-    $netProfit               = $totalSaleAmount - $totalCost - ($totalProductDiscountLkr + $totalCustomDiscountLkr);
-    $totalTransactions       = $sales->count();
-    $averageTransactionValue = $totalTransactions > 0 ? ($totalSaleAmount / $totalTransactions) : 0;
-
-    // Distinct customers (same filter)
-    $totalCustomer = (clone $salesQuery)->distinct('customer_id')->count('customer_id');
-
-
-
-
-
-
-    return Inertia::render('Reports/Index', [
-        'sales'                     => $sales,
-
-        'totalSaleAmount'           => round($totalSaleAmount, 2),
-        'totalDiscountLkr'          => round($totalProductDiscountLkr, 2),
-        'totalCustomDiscountLkr'    => round($totalCustomDiscountLkr, 2),
-        'netProfit'                 => round($netProfit, 2),
-        'totalTransactions'         => $totalTransactions,
-        'averageTransactionValue'   => round($averageTransactionValue, 2),
-        'totalCustomer'             => $totalCustomer,
-
-        'startDate'                 => $startDateRaw,
-        'endDate'                   => $endDateRaw,
-
-        'categorySales'             => $categorySales,
-        'employeeSalesSummary'      => $employeeSalesSummary,
-        'paymentMethodTotals'       => $paymentMethodTotals,
-        'retailGross'               => round($retailGross, 2),
-        'wholesaleGross'            => round($wholesaleGross, 2),
-      
-    ]);
-}
-
-
-
-
-
-
-
-
-
 
     // stockReport removed — stock management is handled in StockTransaction module
-
-
 
     public function searchByCode(Request $request)
     {
@@ -163,7 +137,7 @@ class ReportController extends Controller
             return response()->json([
                 'products' => [],
                 'totalQuantity' => 0,
-                'remainingQuantity' => 0
+                'remainingQuantity' => 0,
             ]);
         }
 
@@ -184,72 +158,35 @@ class ReportController extends Controller
         return response()->json([
             'products' => $products,
             'totalQuantity' => $totalQuantity,
-            'remainingQuantity' => $remainingQuantity
+            'remainingQuantity' => $remainingQuantity,
         ]);
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
         //
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
         //
     }
 
-    /**
-     * Display the specified resource.
-     */
     public function show(Report $report)
     {
         //
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
     public function edit(Report $report)
     {
         //
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
     public function update(Request $request, Report $report)
     {
         //
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     public function destroy(Report $report)
     {
         //
