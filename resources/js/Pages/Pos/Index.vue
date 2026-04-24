@@ -390,7 +390,8 @@
         :return-order-id="returnSale?.order_id || ''"
         :exchange-credit="exchangeCredit"
         :custom_discount_type="custom_discount_type"
-        :custom_discount="custom_discount" />
+        :custom_discount="custom_discount"
+        :sale-type="sale_type" />
     <AlertModel v-model:open="isAlertModalOpen" :message="message" />
 
     <SelectProductModel v-model:open="isSelectModalOpen" :allcategories="allcategories" :colors="colors" :sizes="sizes"
@@ -678,7 +679,7 @@ const submitReturnOrder = async () => {
 const subtotal = computed(() => {
     return products.value
         .reduce(
-            (total, item) => total + parseFloat(getItemDisplayPrice(item)) * item.quantity,
+            (total, item) => total + parseFloat(getItemBasePrice(item)) * item.quantity,
             0
         )
         .toFixed(2);

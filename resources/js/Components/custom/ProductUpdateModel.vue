@@ -323,7 +323,6 @@
                         class="w-full px-4 py-2 mt-2 text-black bg-white rounded-md focus:outline-none focus:ring focus:ring-blue-600"
                         placeholder="Enter wholesale price"
                         @blur="updateWholesaleDiscountedPrice"
-                        required
                       />
                       <span v-if="form.errors.wholesale_price" class="mt-2 text-red-500">{{ form.errors.wholesale_price }}</span>
                     </div>

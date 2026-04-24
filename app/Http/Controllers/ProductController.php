@@ -206,11 +206,11 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
             'color_id' => 'nullable|exists:colors,id',
             'cost_price' => 'nullable|numeric|min:0',
             'retail_price' => [
-                'nullable',
+                'required',
                 'numeric',
                 'min:0',
                 function ($attribute, $value, $fail) use ($request) {
-                    if ($value < $request->input('cost_price')) {
+                    if ($value !== null && $value < (float)$request->input('cost_price')) {
                         $fail('The retail price must be greater than or equal to the cost price.');
                     }
                 },
@@ -222,7 +222,7 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
                 'numeric',
                 'min:0',
                 function ($attribute, $value, $fail) use ($request) {
-                    if ($value < $request->input('cost_price')) {
+                    if ($value !== null && $value < (float)$request->input('cost_price')) {
                         $fail('The wholesale price must be greater than or equal to the cost price.');
                     }
                 },
@@ -253,6 +253,12 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
                 $validated['barcode'] = $this->generateUniqueCode(8);
             }
             $validated['total_quantity'] = $validated['stock_quantity'] ?? 0;
+            
+            // Set default value for wholesale_price if it is not provided
+            $validated['wholesale_price'] = $validated['wholesale_price'] ?? 0;
+            $validated['wholesale_discount'] = $validated['wholesale_discount'] ?? 0;
+            $validated['retail_discount'] = $validated['retail_discount'] ?? 0;
+
             // Create the product
             $product = Product::create($validated);
             // $product->update(['code' => 'PROD-' . $product->id]);
@@ -328,6 +334,11 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
             if (empty($validated['barcode'])) {
                 $validated['barcode'] = $this->generateUniqueCode(8);
             }
+
+            // Set default value for wholesale_price if it is not provided
+            $validated['wholesale_price'] = $validated['wholesale_price'] ?? 0;
+            $validated['wholesale_discount'] = $validated['wholesale_discount'] ?? 0;
+            $validated['retail_discount'] = $validated['retail_discount'] ?? 0;
 
             $product = Product::create($validated);
 
@@ -431,7 +442,7 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
             'size_id' => 'nullable|exists:sizes,id',
             'color_id' => 'nullable|exists:colors,id',
             'cost_price' => 'numeric|min:0',
-            'retail_price' => 'numeric|min:0',
+            'retail_price' => 'required|numeric|min:0',
             'retail_discount' => 'nullable|numeric|min:0|max:100',
             'discounted_retail_price' => 'nullable|numeric|min:0',
             'wholesale_price' => 'nullable|numeric|min:0',
@@ -468,6 +479,11 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
         $transactionType = $stockChange > 0 ? 'Added' : 'Deducted';
         $validated['total_quantity'] = $validated['stock_quantity'];
 
+        // Set default values if fields are cleared
+        $validated['wholesale_price'] = $validated['wholesale_price'] ?? 0;
+        $validated['wholesale_discount'] = $validated['wholesale_discount'] ?? 0;
+        $validated['retail_discount'] = $validated['retail_discount'] ?? 0;
+
         // Update product
         $product->update($validated);
 
@@ -502,11 +518,11 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
             'reason' => 'nullable|string|max:255',
             'cost_price' => 'nullable|numeric|min:0',
             'retail_price' => [
-                'nullable',
+                'required',
                 'numeric',
                 'min:0',
                 function ($attribute, $value, $fail) use ($request) {
-                    if ($value < $request->input('cost_price', 0)) {
+                    if ($value !== null && $value < (float)$request->input('cost_price', 0)) {
                         $fail('The retail price must be greater than or equal to the cost price.');
                     }
                 },
@@ -518,7 +534,7 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
                 'numeric',
                 'min:0',
                 function ($attribute, $value, $fail) use ($request) {
-                    if ($value < $request->input('cost_price', 0)) {
+                    if ($value !== null && $value < (float)$request->input('cost_price', 0)) {
                         $fail('The wholesale price must be greater than or equal to the cost price.');
                     }
                 },
@@ -556,6 +572,11 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
             $transactionType = 'Deducted';
         } else {
             // Action is ADD
+            // Ensure proper default values for missing DB columns if any
+            $validated['wholesale_price'] = $validated['wholesale_price'] ?? 0;
+            $validated['wholesale_discount'] = $validated['wholesale_discount'] ?? 0;
+            $validated['retail_discount'] = $validated['retail_discount'] ?? 0;
+
             // Check if user provided prices that differ from the main product's prices
             $pricesChanged = false;
             
@@ -580,7 +601,7 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
                     'retail_price' => $validated['retail_price'],
                     'retail_discount' => $validated['retail_discount'] ?? 0,
                     'discounted_retail_price' => $validated['discounted_retail_price'] ?? null,
-                    'wholesale_price' => $validated['wholesale_price'],
+                    'wholesale_price' => $validated['wholesale_price'] ?? 0,
                     'wholesale_discount' => $validated['wholesale_discount'] ?? 0,
                     'discounted_wholesale_price' => $validated['discounted_wholesale_price'] ?? null,
                     'expire_date' => $product->expire_date,
@@ -592,7 +613,7 @@ $productsQuery = Product::with('category', 'color', 'size', 'supplier')
                     'retail_price' => $validated['retail_price'],
                     'retail_discount' => $validated['retail_discount'] ?? 0,
                     'discounted_retail_price' => $validated['discounted_retail_price'] ?? null,
-                    'wholesale_price' => $validated['wholesale_price'],
+                    'wholesale_price' => $validated['wholesale_price'] ?? 0,
                     'wholesale_discount' => $validated['wholesale_discount'] ?? 0,
                     'discounted_wholesale_price' => $validated['discounted_wholesale_price'] ?? null,
                 ]);

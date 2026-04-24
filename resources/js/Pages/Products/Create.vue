@@ -118,7 +118,6 @@
                   step="0.01"
                   id="retail_price"
                   class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200"
-                  required
                 />
                 <span v-if="form.errors.retail_price" class="text-sm text-red-500">{{ form.errors.retail_price }}</span>
               </div>

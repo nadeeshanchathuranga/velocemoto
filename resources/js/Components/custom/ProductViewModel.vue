@@ -44,7 +44,19 @@
                     <p class="text-3xl font-bold text-black w-full break-words">
                       {{ selectedProduct.name }}
                       <span
-                        v-if="selectedProduct.discount && selectedProduct.discount > 0"
+                        v-if="selectedProduct.retail_discount && selectedProduct.retail_discount > 0"
+                        class="inline-block px-2 py-2 text-sm font-medium text-white bg-blue-600 rounded"
+                      >
+                        {{ selectedProduct.retail_discount }} % OFF (Retail)
+                      </span>
+                      <span
+                        v-if="selectedProduct.wholesale_discount && selectedProduct.wholesale_discount > 0"
+                        class="inline-block px-2 py-2 text-sm font-medium text-white bg-[#e0aa0f] rounded"
+                      >
+                        {{ selectedProduct.wholesale_discount }} % OFF (Wholesale)
+                      </span>
+                      <span
+                        v-else-if="selectedProduct.discount && selectedProduct.discount > 0"
                         class="inline-block px-2 py-2 text-sm font-medium text-white bg-red-600 rounded"
                       >
                         {{ selectedProduct.discount }} % OFF
@@ -99,12 +111,18 @@
                     </div>
                   </div>
 
-                  <!-- Selling Price & Cost Price -->
-                  <div class="flex items-center justify-between w-full pb-6 text-2xl">
+                  <!-- Retail / Wholesale Price & Cost Price -->
+                  <div class="flex items-start justify-between w-full pb-6 text-2xl gap-4">
                     <div class="flex flex-col w-full">
-                      <p class="text-[#00000099]">Selling Price:</p>
+                      <p class="text-[#00000099]">Retail Price:</p>
                       <p class="font-bold text-black">
-                        {{ selectedProduct?.selling_price ?? "N/A" }} LKR
+                        {{ selectedProduct?.retail_price ?? selectedProduct?.selling_price ?? "N/A" }} LKR
+                      </p>
+                    </div>
+                    <div class="flex flex-col w-full" v-if="selectedProduct?.wholesale_price">
+                      <p class="text-[#00000099]">Wholesale Price:</p>
+                      <p class="font-bold text-black">
+                        {{ selectedProduct.wholesale_price }} LKR
                       </p>
                     </div>
                     <div class="flex flex-col w-full">
@@ -116,30 +134,39 @@
                   </div>
 
                   <!-- Discount Price & Quantity -->
-                  <div class="flex items-center justify-between w-full pb-6 text-2xl">
+                  <div class="flex items-start justify-between w-full pb-6 text-2xl gap-4">
                     <div
                       class="flex flex-col w-full"
-                      v-if="selectedProduct.discount && selectedProduct.discount > 0"
+                      v-if="(selectedProduct?.retail_discount && selectedProduct.retail_discount > 0) || (selectedProduct?.discount && selectedProduct.discount > 0)"
                     >
-                      <p class="text-[#00000099]">Discount Price:</p>
+                      <p class="text-[#00000099]">Retail Discount Price:</p>
                       <p class="font-bold text-black">
-                        {{
-                          selectedProduct.selling_price &&
-                          selectedProduct.discount &&
-                          selectedProduct.discount > 0
-                            ? (
-                                selectedProduct.selling_price -
-                                (selectedProduct.selling_price * selectedProduct.discount) / 100
-                              ).toFixed(2)
-                            : selectedProduct.selling_price
-                        }}
-                        LKR
+                        {{ selectedProduct?.discounted_retail_price ?? selectedProduct?.discounted_price ?? (
+                          selectedProduct?.retail_price ?? selectedProduct?.selling_price ? (
+                            (selectedProduct.retail_price ?? selectedProduct.selling_price) -
+                            ((selectedProduct.retail_price ?? selectedProduct.selling_price) * (selectedProduct.retail_discount ?? selectedProduct.discount)) / 100
+                          ).toFixed(2) : "N/A"
+                        ) }} LKR
+                      </p>
+                    </div>
+                    <div
+                      class="flex flex-col w-full"
+                      v-if="selectedProduct?.wholesale_discount && selectedProduct.wholesale_discount > 0"
+                    >
+                      <p class="text-[#00000099]">Wholesale Discount Price:</p>
+                      <p class="font-bold text-black">
+                        {{ selectedProduct?.discounted_wholesale_price ?? (
+                          selectedProduct?.wholesale_price ? (
+                            selectedProduct.wholesale_price -
+                            (selectedProduct.wholesale_price * selectedProduct.wholesale_discount) / 100
+                          ).toFixed(2) : "N/A"
+                        ) }} LKR
                       </p>
                     </div>
                     <div class="flex flex-col w-full">
                       <p class="text-[#00000099]">Quantity:</p>
                       <p class="font-bold text-black">
-                        {{ selectedProduct?.stock_quantity ?? "N/A" }}
+                        {{ selectedProduct?.stock_quantity ?? selectedProduct?.total_quantity ?? selectedProduct?.quantity ?? "N/A" }}
                       </p>
                     </div>
                   </div>
