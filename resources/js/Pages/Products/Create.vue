@@ -48,48 +48,23 @@
             }}</span>
           </div>
 
-          <!-- Description Input -->
-          <!-- <div>
-            <label
-              for="description"
-              class="block text-sm font-medium text-gray-700"
-              >Description</label
-            >
-            <textarea
-              v-model="form.description"
-              id="description"
-              rows="4"
-              class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200"
-            ></textarea>
-            <span v-if="form.errors.description" class="text-sm text-red-500">{{
-              form.errors.description
-            }}</span>
-          </div> -->
-
           <!-- Size Input -->
-
-
-  <div>
-    <label for="size" class="block text-sm font-medium text-gray-700">Size</label>
-    <select
-      v-model="form.size_id"
-      id="size"
-      class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200"
-    >
-      <option :value="null" disabled>Select Size</option>
-      <option v-for="size in sizes" :key="size.id" :value="size.id">
-        {{ size.name }}
-      </option>
-    </select>
-    <span v-if="form.errors.size" class="text-sm text-red-500">
-      {{ form.errors.size }}
-    </span>
-  </div>
-
-
-
-
-
+          <div>
+            <label for="size" class="block text-sm font-medium text-gray-700">Size</label>
+            <select
+              v-model="form.size_id"
+              id="size"
+              class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200"
+            >
+              <option :value="null" disabled>Select Size</option>
+              <option v-for="size in sizes" :key="size.id" :value="size.id">
+                {{ size.name }}
+              </option>
+            </select>
+            <span v-if="form.errors.size" class="text-sm text-red-500">
+              {{ form.errors.size }}
+            </span>
+          </div>
 
           <!-- Color Input -->
           <div>
@@ -131,26 +106,90 @@
             }}</span>
           </div>
 
-          <!-- Selling Price Input -->
-          <div>
-            <label
-              for="selling_price"
-              class="block text-sm font-medium text-gray-700"
-              >Selling Price</label
-            >
-            <input
-              v-model="form.selling_price"
-              type="number"
-              step="0.01"
-              id="selling_price"
-              class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200"
-              required
-            />
-            <span
-              v-if="form.errors.selling_price"
-              class="text-sm text-red-500"
-              >{{ form.errors.selling_price }}</span
-            >
+          <!-- ============ RETAIL PRICING SECTION ============ -->
+          <div class="p-4 border border-blue-300 rounded-lg bg-blue-50">
+            <h2 class="mb-4 text-lg font-semibold text-blue-800">Retail Pricing</h2>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div>
+                <label for="retail_price" class="block text-sm font-medium text-gray-700">Retail Price</label>
+                <input
+                  v-model="form.retail_price"
+                  type="number"
+                  step="0.01"
+                  id="retail_price"
+                  class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200"
+                />
+                <span v-if="form.errors.retail_price" class="text-sm text-red-500">{{ form.errors.retail_price }}</span>
+              </div>
+              <div>
+                <label for="retail_discount" class="block text-sm font-medium text-gray-700">Retail Discount (%)</label>
+                <input
+                  v-model="form.retail_discount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  id="retail_discount"
+                  class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200"
+                />
+                <span v-if="form.errors.retail_discount" class="text-sm text-red-500">{{ form.errors.retail_discount }}</span>
+              </div>
+              <div>
+                <label for="discounted_retail_price" class="block text-sm font-medium text-gray-700">Discounted Retail Price</label>
+                <input
+                  v-model="form.discounted_retail_price"
+                  type="number"
+                  step="0.01"
+                  id="discounted_retail_price"
+                  class="block w-full mt-1 bg-gray-100 border-gray-300 rounded-md shadow-sm cursor-not-allowed"
+                  readonly
+                />
+                <span v-if="form.errors.discounted_retail_price" class="text-sm text-red-500">{{ form.errors.discounted_retail_price }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============ WHOLESALE PRICING SECTION ============ -->
+          <div class="p-4 border border-green-300 rounded-lg bg-green-50">
+            <h2 class="mb-4 text-lg font-semibold text-green-800">Wholesale Pricing</h2>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <div>
+                <label for="wholesale_price" class="block text-sm font-medium text-gray-700">Wholesale Price</label>
+                <input
+                  v-model="form.wholesale_price"
+                  type="number"
+                  step="0.01"
+                  id="wholesale_price"
+                  class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-green-500 focus:ring focus:ring-green-200"
+                />
+                <span v-if="form.errors.wholesale_price" class="text-sm text-red-500">{{ form.errors.wholesale_price }}</span>
+              </div>
+              <div>
+                <label for="wholesale_discount" class="block text-sm font-medium text-gray-700">Wholesale Discount (%)</label>
+                <input
+                  v-model="form.wholesale_discount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  id="wholesale_discount"
+                  class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-green-500 focus:ring focus:ring-green-200"
+                />
+                <span v-if="form.errors.wholesale_discount" class="text-sm text-red-500">{{ form.errors.wholesale_discount }}</span>
+              </div>
+              <div>
+                <label for="discounted_wholesale_price" class="block text-sm font-medium text-gray-700">Discounted Wholesale Price</label>
+                <input
+                  v-model="form.discounted_wholesale_price"
+                  type="number"
+                  step="0.01"
+                  id="discounted_wholesale_price"
+                  class="block w-full mt-1 bg-gray-100 border-gray-300 rounded-md shadow-sm cursor-not-allowed"
+                  readonly
+                />
+                <span v-if="form.errors.discounted_wholesale_price" class="text-sm text-red-500">{{ form.errors.discounted_wholesale_price }}</span>
+              </div>
+            </div>
           </div>
 
           <!-- Stock Quantity Input -->
@@ -190,34 +229,6 @@
             }}</span>
           </div>
 
-          <!-- Supplier Select -->
-
-          <!-- <div>
-            <label
-              for="supplier_id"
-              class="block text-sm font-medium text-gray-700"
-              >Supplier</label
-            >
-            <select
-              v-model="form.supplier_id"
-              id="supplier_id"
-              class="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200"
-              required
-            >
-              <option :value="null" disabled>Select Supplier</option>
-              <option
-                v-for="supplier in suppliers"
-                :key="supplier.id"
-                :value="supplier.id"
-              >
-                {{ supplier.name }}
-              </option>
-            </select>
-            <span v-if="form.errors.supplier_id" class="text-sm text-red-500">{{
-              form.errors.supplier_id
-            }}</span>
-          </div> -->
-
           <!-- Image Upload -->
           <div>
             <label for="image" class="block text-sm font-medium text-gray-700"
@@ -252,7 +263,7 @@
 
 <script setup>
 import { Link, useForm } from "@inertiajs/vue3";
-import { defineProps, onMounted } from "vue";
+import { onMounted, watch } from "vue";
 import AdminLayout from "@/Layouts/AdminLayout.vue";
 
 // Define props
@@ -260,40 +271,65 @@ const props = defineProps({
   products: Array,
   categories: Array,
   colors: Array,
-//   suppliers: Array,
   sizes: Array,
 });
-
-// onMounted(() => {
-//   console.log("Categories:", props.categories);
-//   console.table(props.categories);
-// });
 
 const form = useForm({
   category_id: null,
   name: "",
-//   description: "",
   size_id: "",
   color_id: "",
   cost_price: null,
-  selling_price: null,
+  retail_price: null,
+  retail_discount: 0,
+  discounted_retail_price: null,
+  wholesale_price: null,
+  wholesale_discount: 0,
+  discounted_wholesale_price: null,
   stock_quantity: null,
   barcode: "",
-//   supplier_id: null,
-  image: null, // For file upload
+  image: null,
 });
 
+// Auto-calculate discounted retail price
+watch(
+  () => [form.retail_price, form.retail_discount],
+  ([price, discount]) => {
+    const p = parseFloat(price) || 0;
+    const d = parseFloat(discount) || 0;
+    if (p > 0 && d > 0) {
+      form.discounted_retail_price = (p - (p * d) / 100).toFixed(2);
+    } else {
+      form.discounted_retail_price = null;
+    }
+  }
+);
+
+// Auto-calculate discounted wholesale price
+watch(
+  () => [form.wholesale_price, form.wholesale_discount],
+  ([price, discount]) => {
+    const p = parseFloat(price) || 0;
+    const d = parseFloat(discount) || 0;
+    if (p > 0 && d > 0) {
+      form.discounted_wholesale_price = (p - (p * d) / 100).toFixed(2);
+    } else {
+      form.discounted_wholesale_price = null;
+    }
+  }
+);
+
 const handleImageUpload = (event) => {
-  form.image = event.target.files[0]; // Set the file to the form object
+  form.image = event.target.files[0];
 };
 
 const submit = () => {
-  console.log("Form Data:", form); // Debug form data
+  console.log("Form Data:", form);
   form.post("/products", {
     preserveScroll: true,
     onSuccess: () => {
       console.log("Product created successfully!");
-      form.reset(); // Reset form fields after successful submission
+      form.reset();
     },
     onError: (errors) => {
       console.error("Form submission failed:", errors);

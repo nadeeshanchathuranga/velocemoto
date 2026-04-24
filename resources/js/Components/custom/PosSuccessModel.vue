@@ -99,6 +99,10 @@ const props = defineProps({
         type: String,
         default: "cash",
     },
+    saleType: {
+        type: String,
+        default: "retail",
+    },
     isReturnExchange: {
         type: Boolean,
         default: false,
@@ -127,32 +131,56 @@ const paymentMethodLabel = computed(() => {
 const isCashPayment = computed(() => paymentMethodLabel.value === "Cash");
 
 const handlePrintReceipt = () => {
-    // Calculate totals from props.products
-    const subTotal = props.products.reduce(
-        (sum, product) =>
-            sum + parseFloat(product.selling_price) * product.quantity,
-        0
-    );
-    const customDiscount = Number(props.custom_discount || 0);
-    const totalDiscount = props.products
-        .reduce((total, item) => {
-            // Check if item has a discount
-            if (item.discount && item.discount > 0 && item.apply_discount == true) {
-                const discountAmount =
-                    (parseFloat(item.selling_price) - parseFloat(item.discounted_price)) *
-                    item.quantity;
-                return total + discountAmount;
-            }
-            return total; // If no discount, return total as-is
-        }, 0)
-        .toFixed(2); // Ensures two decimal places
+    // Helper to get selected batch logic dynamically
+    const getSelectedBatch = (item) => {
+        if (item.selected_batch_id && item.batches) {
+            return item.batches.find(b => b.id === item.selected_batch_id) || item;
+        }
+        return item;
+    };
+    
+    const getItemBasePrice = (item) => {
+        const target = getSelectedBatch(item);
+        if (props.saleType === 'wholesale') {
+            return target.wholesale_price || target.retail_price || 0;
+        }
+        return target.retail_price || target.selling_price || 0;
+    };
 
-    const discount = 0; // Example discount (can be dynamic)
+    const getItemDiscountPercent = (item) => {
+        const target = getSelectedBatch(item);
+        if (props.saleType === 'wholesale') {
+            return parseFloat(target.wholesale_discount || 0);
+        }
+        return parseFloat(target.retail_discount || target.discount || 0);
+    };
+
+    const getItemDisplayPrice = (item) => {
+        const base = getItemBasePrice(item);
+        const target = getSelectedBatch(item);
+        if (props.saleType === 'wholesale') {
+            if (item.apply_discount && target.wholesale_discount > 0 && target.discounted_wholesale_price > 0) {
+                return target.discounted_wholesale_price;
+            }
+            return base;
+        }
+        if (item.apply_discount && target.retail_discount > 0 && target.discounted_retail_price > 0) {
+            return target.discounted_retail_price;
+        }
+        return base;
+    };
+
+    // Calculate totals from props.products
+    const subTotal = Number(props.subTotal || 0);
+    const customDiscount = Number(props.custom_discount || 0);
+    const totalDiscount = Number(props.totalDiscount || 0);
     const total = subTotal - totalDiscount - customDiscount;
 
 const productRows = props.products
     .map((product) => {
       const isPack = Number(product.is_promotion) === 1;
+      const basePrice = getItemBasePrice(product);
+      const discountPercent = getItemDiscountPercent(product);
 
       const parentRow = `
         <tr>
@@ -161,13 +189,8 @@ const productRows = props.products
             ${isPack ? `` : ``}
           </td>
           <td style="text-align:center;">${Number(product.quantity || 0)}</td>
-          <td>
-            ${
-              (product.discount > 0 && product.apply_discount)
-                ? `<div style="font-weight:bold;font-size:7px;background-color:black;color:white;text-align:center;">${product.discount}% off</div>`
-                : ``
-            }
-            <div>${Number(product.selling_price || 0).toFixed(2)}</div>
+          <td style="text-align:right;">
+            <div>${Number(basePrice || 0).toFixed(2)}</div>
           </td>
         </tr>
       `;
@@ -334,6 +357,7 @@ const productRows = props.products
             ? `<p>${companyInfo.value.phone || ''} ${companyInfo.value.phone2 || ''}  ${companyInfo.value.email || ''}</p>`
             : ''}
     ${props.isReturnExchange ? `<div class="exchange-badge">RETURN EXCHANGE BILL</div>` : ''}
+    ${props.saleType === 'wholesale' ? `<div class="exchange-badge">WHOLESALE BILL</div>` : ''}
 
           </div>
 

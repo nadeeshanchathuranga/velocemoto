@@ -20,6 +20,25 @@
                     <p class="text-3xl font-bold tracking-wide text-black">
                         Order ID : #{{ displayOrderId }}
                     </p>
+
+                    <!-- Sale Type Toggle -->
+                    <div class="flex items-center space-x-3 bg-white rounded-full shadow-lg px-3 py-2 border-2 border-gray-300">
+                        <button
+                            @click="sale_type = 'retail'"
+                            :class="sale_type === 'retail' ? 'bg-blue-600 text-white shadow-inner' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                            class="px-8 py-3 text-xl font-black tracking-wider uppercase rounded-full transition-all duration-300"
+                        >
+                            Retail
+                        </button>
+                        <button
+                            @click="sale_type = 'wholesale'"
+                            :class="sale_type === 'wholesale' ? 'bg-green-600 text-white shadow-inner' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                            class="px-8 py-3 text-xl font-black tracking-wider uppercase rounded-full transition-all duration-300"
+                        >
+                            Wholesale
+                        </button>
+                    </div>
+
                     <p class="text-3xl text-black cursor-pointer">
                         <i @click="refreshData" class="ri-restart-line"></i>
                     </p>
@@ -151,9 +170,17 @@
                             <div class="flex flex-col justify-between w-5/6">
                                 <p class="text-xl text-black">
                                     {{ item.name }}
-
-
                                 </p>
+                                
+                                <select 
+                                    v-if="item.batches && item.batches.length > 1" 
+                                    v-model="item.selected_batch_id"
+                                    class="mt-1 block w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                    <option v-for="batch in item.batches" :key="batch.id" :value="batch.id">
+                                        Batch {{ batch.batch_no || batch.id }} - {{ batch.stock_quantity }} in stock (Ret: ${{ batch.retail_price }}, Whl: ${{ batch.wholesale_price }})
+                                    </option>
+                                </select>
 
                                 <div
   v-if="Number(item.is_promotion) === 1"
@@ -199,28 +226,26 @@
                                     <div class="flex items-center justify-center">
                                         <div>
                                             <p @click="applyDiscount(item.id)" v-if="
-                                                item.discount &&
-                                                item.discount > 0 &&
+                                                getItemDiscountPercent(item) > 0 &&
                                                 item.apply_discount == false &&
                                                 !appliedCoupon &&
                                                 !isReturnCashMode
                                             "
                                                 class="cursor-pointer py-1 text-center px-4 bg-green-600 rounded-xl font-bold text-white tracking-wider">
-                                                Apply {{ item.discount }}% off
+                                                Apply {{ getItemDiscountPercent(item) }}% off
                                             </p>
 
                                             <p v-if="
-                                                item.discount &&
-                                                item.discount > 0 &&
+                                                getItemDiscountPercent(item) > 0 &&
                                                 item.apply_discount == true &&
                                                 !appliedCoupon &&
                                                 !isReturnCashMode
                                             " @click="removeDiscount(item.id)"
                                                 class="cursor-pointer py-1 text-center px-4 bg-red-600 rounded-xl font-bold text-white tracking-wider">
-                                                Remove {{ item.discount }}% Off
+                                                Remove {{ getItemDiscountPercent(item) }}% Off
                                             </p>
                                             <p class="text-2xl font-bold text-black text-right">
-                                                {{ item.selling_price }}
+                                                {{ getItemDisplayPrice(item) }}
                                                 LKR
                                             </p>
                                         </div>
@@ -365,7 +390,8 @@
         :return-order-id="returnSale?.order_id || ''"
         :exchange-credit="exchangeCredit"
         :custom_discount_type="custom_discount_type"
-        :custom_discount="custom_discount" />
+        :custom_discount="custom_discount"
+        :sale-type="sale_type" />
     <AlertModel v-model:open="isAlertModalOpen" :message="message" />
 
     <SelectProductModel v-model:open="isSelectModalOpen" :allcategories="allcategories" :colors="colors" :sizes="sizes"
@@ -417,6 +443,7 @@ const returnType = ref("cash_return");
 const exchangeCredit = ref(0);
 const exchangeReturnItems = ref([]);
 const returnReceiptProducts = ref([]);
+const sale_type = ref('retail');
 const isExchangeReturn = computed(() => {
     return isReturnMode.value && returnType.value === "product_return";
 });
@@ -554,6 +581,7 @@ const submitOrder = async () => {
             cash: cash.value,
             custom_discount: custom_discount.value,
             custom_discount_type: custom_discount_type.value,
+            sale_type: sale_type.value,
         });
         isSuccessModalOpen.value = true;
         console.log(response.data); // Handle success
@@ -633,6 +661,7 @@ const submitReturnOrder = async () => {
                 cash: cash.value,
                 custom_discount: custom_discount.value,
                 custom_discount_type: custom_discount_type.value,
+                sale_type: sale_type.value,
             });
 
             isSuccessModalOpen.value = true;
@@ -650,23 +679,22 @@ const submitReturnOrder = async () => {
 const subtotal = computed(() => {
     return products.value
         .reduce(
-            (total, item) => total + parseFloat(item.selling_price) * item.quantity,
+            (total, item) => total + parseFloat(getItemBasePrice(item)) * item.quantity,
             0
         )
-        .toFixed(2); // Ensures two decimal places
+        .toFixed(2);
 });
 
 const totalDiscount = computed(() => {
     const productDiscount = products.value.reduce((total, item) => {
-        // Check if item has a discount
-        if (item.discount && item.discount > 0 && item.apply_discount == true) {
-            const discountAmount =
-                (parseFloat(item.selling_price) - parseFloat(item.discounted_price)) *
-                item.quantity;
+        const basePrice = parseFloat(getItemBasePrice(item));
+        const finalPrice = parseFloat(getItemDisplayPrice(item));
+        if (item.apply_discount == true && basePrice > finalPrice) {
+            const discountAmount = (basePrice - finalPrice) * item.quantity;
             return total + discountAmount;
         }
-        return total; // If no discount, return total as-is
-    }, 0); // Ensures two decimal places
+        return total;
+    }, 0);
 
     const couponDiscount = appliedCoupon.value
         ? Number(appliedCoupon.value.discount)
@@ -783,10 +811,15 @@ const submitBarcode = async () => {
                 existingProduct.quantity += 1;
             } else {
                 // If it doesn't exist, add it to the products array with quantity 1
+                let defaultBatchId = null;
+                if (fetchedProduct.batches && fetchedProduct.batches.length > 0) {
+                    defaultBatchId = fetchedProduct.batches[0].id;
+                }
                 products.value.push({
                     ...fetchedProduct,
                     quantity: 1,
                     apply_discount: false, // Add the new attribute
+                    selected_batch_id: defaultBatchId,
                 });
             }
 
@@ -870,11 +903,16 @@ const handleSelectedProducts = (selectedProducts) => {
             // If the product exists, increment its quantity
             existingProduct.quantity += 1;
         } else {
+            let defaultBatchId = null;
+            if (fetchedProduct.batches && fetchedProduct.batches.length > 0) {
+                defaultBatchId = fetchedProduct.batches[0].id;
+            }
             // If the product doesn't exist, add it with a default quantity
             products.value.push({
                 ...fetchedProduct,
                 quantity: 1,
                 apply_discount: false, // Default additional attribute
+                selected_batch_id: defaultBatchId,
             });
         }
     });
@@ -949,4 +987,55 @@ const handleApplyReturnItems = ({ sale, products: selectedProducts, refundTotal,
 //   form.barcode = productName; // Set the selected product name to the barcode field
 //   searchTerm.value = ""; // Clear the search term after selection
 // };
+
+const getSelectedBatch = (item) => {
+    if (item.selected_batch_id && item.batches) {
+        return item.batches.find(b => b.id === item.selected_batch_id) || item;
+    }
+    return item;
+};
+
+/**
+ * Helper: Get the display price for a cart item based on the current sale_type.
+ * Returns the base (non-discounted) price for the selected pricing tier.
+ */
+const getItemBasePrice = (item) => {
+    const target = getSelectedBatch(item);
+    if (sale_type.value === 'wholesale') {
+        return target.wholesale_price || target.retail_price || 0;
+    }
+    return target.retail_price || target.selling_price || 0;
+};
+
+/**
+ * Helper: Get the discount percentage for a cart item based on the current sale_type.
+ */
+const getItemDiscountPercent = (item) => {
+    const target = getSelectedBatch(item);
+    if (sale_type.value === 'wholesale') {
+        return parseFloat(target.wholesale_discount || 0);
+    }
+    return parseFloat(target.retail_discount || target.discount || 0);
+};
+
+/**
+ * Helper: Get the effective selling price for a cart item.
+ * If a discount is applied and a discounted price exists, use that.
+ * Otherwise, use the base price for the selected pricing tier.
+ */
+const getItemDisplayPrice = (item) => {
+    const base = getItemBasePrice(item);
+    const target = getSelectedBatch(item);
+    if (sale_type.value === 'wholesale') {
+        if (item.apply_discount && target.wholesale_discount > 0 && target.discounted_wholesale_price > 0) {
+            return target.discounted_wholesale_price;
+        }
+        return base;
+    }
+    // Retail
+    if (item.apply_discount && target.retail_discount > 0 && target.discounted_retail_price > 0) {
+        return target.discounted_retail_price;
+    }
+    return base;
+};
 </script>

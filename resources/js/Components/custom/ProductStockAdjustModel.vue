@@ -60,6 +60,52 @@
                 <span v-if="form.errors.quantity" class="text-sm text-red-500">{{ form.errors.quantity }}</span>
               </div>
 
+              <!-- Optional Price Changes (Only when adding stock) -->
+              <div v-if="form.action === 'add'" class="p-4 border border-gray-600 rounded-lg bg-gray-800 space-y-4">
+                <h4 class="text-sm font-bold text-gray-300">Optional: Update Pricing for New Stock</h4>
+                <p class="text-xs text-gray-400">If you leave these unchanged, the stock will be added to the current batch. If you change them, a new batch will be created with the new prices.</p>
+                
+                <div>
+                  <label class="block text-sm font-medium text-gray-300">Cost Price</label>
+                  <input
+                    v-model="form.cost_price"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Enter cost price"
+                    class="w-full px-4 py-2 mt-2 text-black rounded-md focus:outline-none focus:ring focus:ring-blue-600"
+                  />
+                  <span v-if="form.errors.cost_price" class="text-sm text-red-500">{{ form.errors.cost_price }}</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-300">Retail Price</label>
+                    <input
+                      v-model="form.retail_price"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Enter retail price"
+                      class="w-full px-4 py-2 mt-2 text-black rounded-md focus:outline-none focus:ring focus:ring-blue-600"
+                    />
+                    <span v-if="form.errors.retail_price" class="text-sm text-red-500">{{ form.errors.retail_price }}</span>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-300">Wholesale Price</label>
+                    <input
+                      v-model="form.wholesale_price"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Enter wholesale price"
+                      class="w-full px-4 py-2 mt-2 text-black rounded-md focus:outline-none focus:ring focus:ring-blue-600"
+                    />
+                    <span v-if="form.errors.wholesale_price" class="text-sm text-red-500">{{ form.errors.wholesale_price }}</span>
+                  </div>
+                </div>
+              </div>
+
                 <div>
                 <label class="block text-sm font-medium text-gray-300">Supplier</label>
                 <select
@@ -131,6 +177,9 @@ const form = useForm({
   quantity: "",
   supplier_id: selectedProduct?.supplier_id || "",
   reason: "",
+  cost_price: selectedProduct?.cost_price || "",
+  retail_price: selectedProduct?.retail_price || "",
+  wholesale_price: selectedProduct?.wholesale_price || "",
 });
 
 const playClickSound = () => {
@@ -154,6 +203,9 @@ watch(
       form.quantity = "";
       form.supplier_id = selectedProduct?.supplier_id || "";
       form.reason = "";
+      form.cost_price = selectedProduct?.cost_price || "";
+      form.retail_price = selectedProduct?.retail_price || "";
+      form.wholesale_price = selectedProduct?.wholesale_price || "";
       form.clearErrors();
     }
   }
@@ -167,7 +219,7 @@ const submit = () => {
   form.post(route("products.adjustStock", selectedProduct.id), {
     preserveState: true,
     onSuccess: () => {
-      form.reset("quantity", "reason");
+      form.reset("quantity", "reason", "cost_price", "retail_price", "wholesale_price");
       emit("update:open", false);
     },
   });

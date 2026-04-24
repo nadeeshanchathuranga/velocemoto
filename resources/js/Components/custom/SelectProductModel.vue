@@ -170,7 +170,7 @@
                             <p
                               class="px-3 text-white bg-green-700 py-2 rounded-full flex items-center"
                             >
-                              {{ product.selling_price || "N/A" }}
+                              {{ (product.batches && product.batches.length > 0) ? product.batches[0].retail_price : (product.selling_price || "N/A") }}
                             </p>
                           </div>
                           <div

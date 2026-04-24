@@ -478,7 +478,7 @@ import { Link, useForm, router } from "@inertiajs/vue3";
 import Header from "@/Components/custom/Header.vue";
 import Footer from "@/Components/custom/Footer.vue";
 import Banner from "@/Components/Banner.vue";
-import { defineProps, onMounted } from "vue";
+import { onMounted } from "vue";
 import ProductCreateModel from "@/Components/custom/ProductCreateModel.vue";
 
 import ProductDuplicateModel from "@/Components/custom/ProductDuplicateModel.vue";

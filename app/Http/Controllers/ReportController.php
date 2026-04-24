@@ -62,12 +62,23 @@ class ReportController extends Controller
         return $type === 'percent' ? ($gross * $val / 100.0) : $val;
     };
 
-    // Category totals (from filtered sales)
+    // Category and Channel totals (from filtered sales)
     $categorySales = [];
+    $retailGross = 0;
+    $wholesaleGross = 0;
+
     foreach ($sales as $sale) {
         foreach ($sale->saleItems as $item) {
             $categoryName = $item->product->category->name ?? 'No Category';
             $categorySales[$categoryName] = ($categorySales[$categoryName] ?? 0) + (float) $item->total_price;
+
+            // Calculate channel breakdown based on sale_type
+            // PosController stores unit_price as the final price after product discounts
+            if ($item->sale_type === 'wholesale') {
+                $wholesaleGross += (float) $item->total_price;
+            } else {
+                $retailGross += (float) $item->total_price;
+            }
         }
     }
 
@@ -125,7 +136,8 @@ class ReportController extends Controller
         'categorySales'             => $categorySales,
         'employeeSalesSummary'      => $employeeSalesSummary,
         'paymentMethodTotals'       => $paymentMethodTotals,
-
+        'retailGross'               => round($retailGross, 2),
+        'wholesaleGross'            => round($wholesaleGross, 2),
       
     ]);
 }
