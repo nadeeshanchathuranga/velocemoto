@@ -152,6 +152,24 @@
   </div>
 </div>
 
+<!-- Credit/Advance cards -->
+<div class="grid w-full md:grid-cols-2 grid-cols-1 gap-4 mb-4">
+  <div class="py-6 flex flex-col justify-center items-center border-2 border-[#de911f] w-full space-y-4 rounded-2xl bg-[#fde9d7] shadow-lg hover:-translate-y-1 transition">
+    <div class="flex flex-col items-center justify-center text-center px-2">
+      <h2 class="text-xl font-extrabold tracking-wide text-black uppercase">Credit Bills</h2>
+    </div>
+    <p class="text-2xl font-bold text-black">{{ toMoney(totalCreditBillOutstanding) }} LKR</p>
+    <p class="text-sm text-slate-600 text-center">Total outstanding amount for pending credit bills.</p>
+  </div>
+  <div class="py-6 flex flex-col justify-center items-center border-2 border-[#0f766e] w-full space-y-4 rounded-2xl bg-[#def7f3] shadow-lg hover:-translate-y-1 transition">
+    <div class="flex flex-col items-center justify-center text-center px-2">
+      <h2 class="text-xl font-extrabold tracking-wide text-black uppercase">Advance Payments</h2>
+    </div>
+    <p class="text-2xl font-bold text-black">{{ toMoney(totalAdvancePayments) }} LKR</p>
+    <p class="text-sm text-slate-600 text-center">Total advances paid against pending credit bills.</p>
+  </div>
+</div>
+
 
 
 
@@ -424,6 +442,8 @@ const props = defineProps({
   totalCustomDiscountLkr: { type: Number, required: true },  // custom discount total after type conversion
   retailGross: { type: Number, required: true },
   wholesaleGross: { type: Number, required: true },
+  totalCreditBillOutstanding: { type: Number, required: true },
+  totalAdvancePayments: { type: Number, required: true },
 
   totalCustomer: { type: Number, required: true },
   startDate: { type: String, default: "" },
