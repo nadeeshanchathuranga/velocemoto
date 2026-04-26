@@ -28,6 +28,27 @@
         </div>
       </Link>
 
+      <Link href="/credit-bills" v-if="HasRole(['Admin', 'Cashier'])">
+        <div class="dashboard-card bg-[#0f766e]">
+          <div class="card-content">
+            <div class="icon-container">
+              <img
+                src="/images/dashboard/return-bill.png"
+                class="icon"
+                alt="Credit Bill"
+              />
+            </div>
+            <div class="text-container">
+              <p class="title">Credit Bills</p>
+              <p class="description">
+                View outstanding credit sales and load unpaid orders into the POS for payment.
+              </p>
+            </div>
+          </div>
+        </div>
+      </Link>
+
+
       <Link href="/categories" v-if="HasRole(['Admin', 'Manager'])">
         <div class="dashboard-card bg-[#003161]">
           <div class="card-content">
@@ -386,6 +407,8 @@ import Footer from "@/Components/custom/Footer.vue";
 import { Link } from "@inertiajs/vue3";
 import { Head } from "@inertiajs/vue3";
 import { HasRole } from "@/Utils/Permissions";
+
+defineProps({});
 </script>
 
 <style>
