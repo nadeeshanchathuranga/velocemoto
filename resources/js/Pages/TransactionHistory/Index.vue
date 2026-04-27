@@ -279,13 +279,18 @@ $(document).ready(function () {
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Receipt</title>
 <style>
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
   @media print {
     body { margin:0; padding:0; -webkit-print-color-adjust:exact; }
   }
   body {
     background-color:#ffffff; font-size:12px; font-family:"Arial",sans-serif;
-    margin:0; padding:10px; color:#000;
+    margin:0; width:80mm; padding:10px 5mm; color:#000;
   }
+  .receipt-container { width:80mm; box-sizing:border-box; }
   .header { text-align:center; margin-bottom:16px; }
   .header h1 { font-size:20px; font-weight:bold; margin:0; }
   .header p { font-size:10px; margin:4px 0; }
@@ -395,9 +400,8 @@ $(document).ready(function () {
 
     <div class="footer">
       <p>No Exchange On Purchased Items</p>
-      <p>THANK YOU COME AGAIN</p>
-      <p class="italic">Let the quality define its own standards</p>
-      <p style="font-weight:bold;">Powered by JAAN Network Ltd.</p>
+      <p>Thank you for choosing NP Motors. Ride Safe!</p>
+      <p style="font-weight:bold;">Powered by JAAN Network</p>
       <p>${new Date().toLocaleTimeString()}</p>
     </div>
   </div>
