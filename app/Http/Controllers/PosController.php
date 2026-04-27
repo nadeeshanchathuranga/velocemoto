@@ -368,6 +368,12 @@ class PosController extends Controller
         $paymentAmount = (float) $request->input('cash', 0);
         $saleId = $request->input('sale_id');
 
+        if (!$saleId) {
+            $request->validate([
+                'orderid' => 'required|string|max:191|unique:sales,order_id',
+            ]);
+        }
+
         $customer = null;
         $cartItems = $request->input('products');
 

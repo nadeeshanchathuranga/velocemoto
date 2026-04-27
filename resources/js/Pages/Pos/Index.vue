@@ -453,7 +453,7 @@ const isSelectModalOpen = ref(false);
 const isReturnModalOpen = ref(false);
 const isReturnSuccessModalOpen = ref(false);
 const custom_discount_type = ref('percent');
-const orderid = computed(() => generateOrderId());
+const orderid = ref(generateOrderId());
 const returnSale = ref(null);
 const isReturnMode = ref(false);
 const returnPaymentMethod = ref('Cash');
@@ -639,6 +639,7 @@ const clearOrderState = () => {
     exchangeCredit.value = 0;
     returnReceiptProducts.value = [];
     exchangeReturnItems.value = [];
+    orderid.value = generateOrderId();
 };
 
 const removeProduct = (id) => {
@@ -718,7 +719,7 @@ const submitOrder = async () => {
             employee_id: employee_id.value,
             paymentMethod: selectedPaymentMethod.value,
             userId: props.loggedInUser.id,
-            orderid: orderid.value,
+            orderid: displayOrderId.value,
             cash: cash.value,
             is_credit: isCredit.value,
             sale_id: props.loadedSale?.id || null,
@@ -731,9 +732,18 @@ const submitOrder = async () => {
         isSuccessModalOpen.value = true;
         console.log(response.data); // Handle success
     } catch (error) {
-        if (error.response.status === 423) {
+        const status = error.response?.status;
+        if (status === 423 || status === 422) {
             isAlertModalOpen.value = true;
-            message.value = error.response.data.message;
+            const data = error.response?.data;
+            const firstValidationError = data?.errors
+                ? Object.values(data.errors).flat()?.[0]
+                : null;
+            message.value = data?.message || firstValidationError || "Failed to submit order.";
+
+            if (status === 422 && data?.errors?.orderid) {
+                orderid.value = generateOrderId();
+            }
         }
         console.error(
             "Error submitting customer details:",
@@ -802,7 +812,7 @@ const submitReturnOrder = async () => {
                 employee_id: employee_id.value,
                 paymentMethod: selectedPaymentMethod.value,
                 userId: props.loggedInUser.id,
-                orderid: orderid.value,
+                orderid: displayOrderId.value,
                 cash: cash.value,
                 custom_discount: custom_discount.value,
                 custom_discount_type: custom_discount_type.value,
