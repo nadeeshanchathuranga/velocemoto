@@ -20,7 +20,7 @@ class DatabaseSeeder extends Seeder
                 'name' => 'admin',
                 'email' => 'admin@admin.com',
                 'role_type' => 'Admin',
-                'password' => Hash::make('admin@bookparadise2026'),
+                'password' => Hash::make('admin@velocemoto2026'),
             ]);
         }
 
@@ -29,7 +29,7 @@ class DatabaseSeeder extends Seeder
                 'name' => 'manager',
                 'email' => 'manager@manager.com',
                 'role_type' => 'Manager',
-                'password' => Hash::make('manager@bookparadise2026'),
+                'password' => Hash::make('manager@velocemoto2026'),
             ]);
         }
 
@@ -42,7 +42,7 @@ class DatabaseSeeder extends Seeder
                 'name' => 'cashier1',
                 'email' => 't1@cashier.com',
                 'role_type' => 'Cashier',
-                'password' => Hash::make('cashier1@bookparadise2026'),
+                'password' => Hash::make('cashier1@velocemoto2026'),
             ]);
         }
 
@@ -51,7 +51,7 @@ class DatabaseSeeder extends Seeder
                 'name' => 'cashier2',
                 'email' => 't2@cashier.com',
                 'role_type' => 'Cashier',
-                'password' => Hash::make('cashier2@bookparadise2026'),
+                'password' => Hash::make('cashier2@velocemoto2026'),
             ]);
         }
 
