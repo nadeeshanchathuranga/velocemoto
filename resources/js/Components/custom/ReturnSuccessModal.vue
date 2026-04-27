@@ -83,10 +83,14 @@ const handlePrint = () => {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>Return Receipt</title>
                 <style>
+                    @page {
+                        size: 80mm auto;
+                        margin: 0;
+                    }
                     @media print {
                         body {
                             margin: 0;
-                            padding: 0 5mm 0 0;
+                            padding: 0;
                             -webkit-print-color-adjust: exact;
                         }
                     }
@@ -95,8 +99,13 @@ const handlePrint = () => {
                         font-size: 12px;
                         font-family: 'Arial', sans-serif;
                         margin: 0;
-                        padding: 10px 5mm 10mm 7mm;
+                        width: 80mm;
+                        padding: 10px 5mm;
                         color: #000;
+                    }
+                    .receipt-container {
+                        width: 80mm;
+                        box-sizing: border-box;
                     }
                     .header {
                         text-align: center;
@@ -239,8 +248,8 @@ const handlePrint = () => {
                     </div>
 
                     <div class="footer">
-                        <p>THANK YOU COME AGAIN</p>
-                        <p style="font-weight: bold;">Powered by JAAN Network Ltd.</p>
+                        <p>Thank you for choosing NP Motors. Ride Safe!</p>
+                        <p style="font-weight: bold;">Powered by JAAN Network</p>
                         <p>${new Date().toLocaleTimeString()}</p>
                     </div>
                 </div>
