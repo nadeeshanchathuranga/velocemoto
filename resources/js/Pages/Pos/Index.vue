@@ -20,6 +20,25 @@
                     <p class="text-3xl font-bold tracking-wide text-black">
                         Order ID : #{{ displayOrderId }}
                     </p>
+
+                    <!-- Sale Type Toggle -->
+                    <div class="flex items-center space-x-3 bg-white rounded-full shadow-lg px-3 py-2 border-2 border-gray-300">
+                        <button
+                            @click="sale_type = 'retail'"
+                            :class="sale_type === 'retail' ? 'bg-blue-600 text-white shadow-inner' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                            class="px-8 py-3 text-xl font-black tracking-wider uppercase rounded-full transition-all duration-300"
+                        >
+                            Retail
+                        </button>
+                        <button
+                            @click="sale_type = 'wholesale'"
+                            :class="sale_type === 'wholesale' ? 'bg-green-600 text-white shadow-inner' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                            class="px-8 py-3 text-xl font-black tracking-wider uppercase rounded-full transition-all duration-300"
+                        >
+                            Wholesale
+                        </button>
+                    </div>
+
                     <p class="text-3xl text-black cursor-pointer">
                         <i @click="refreshData" class="ri-restart-line"></i>
                     </p>
@@ -151,9 +170,17 @@
                             <div class="flex flex-col justify-between w-5/6">
                                 <p class="text-xl text-black">
                                     {{ item.name }}
-
-
                                 </p>
+                                
+                                <select 
+                                    v-if="item.batches && item.batches.length > 1" 
+                                    v-model="item.selected_batch_id"
+                                    class="mt-1 block w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                    <option v-for="batch in item.batches" :key="batch.id" :value="batch.id">
+                                        Batch {{ batch.batch_no || batch.id }} - {{ batch.stock_quantity }} in stock (Ret: ${{ batch.retail_price }}, Whl: ${{ batch.wholesale_price }})
+                                    </option>
+                                </select>
 
                                 <div
   v-if="Number(item.is_promotion) === 1"
@@ -199,28 +226,26 @@
                                     <div class="flex items-center justify-center">
                                         <div>
                                             <p @click="applyDiscount(item.id)" v-if="
-                                                item.discount &&
-                                                item.discount > 0 &&
+                                                getItemDiscountPercent(item) > 0 &&
                                                 item.apply_discount == false &&
                                                 !appliedCoupon &&
                                                 !isReturnCashMode
                                             "
                                                 class="cursor-pointer py-1 text-center px-4 bg-green-600 rounded-xl font-bold text-white tracking-wider">
-                                                Apply {{ item.discount }}% off
+                                                Apply {{ getItemDiscountPercent(item) }}% off
                                             </p>
 
                                             <p v-if="
-                                                item.discount &&
-                                                item.discount > 0 &&
+                                                getItemDiscountPercent(item) > 0 &&
                                                 item.apply_discount == true &&
                                                 !appliedCoupon &&
                                                 !isReturnCashMode
                                             " @click="removeDiscount(item.id)"
                                                 class="cursor-pointer py-1 text-center px-4 bg-red-600 rounded-xl font-bold text-white tracking-wider">
-                                                Remove {{ item.discount }}% Off
+                                                Remove {{ getItemDiscountPercent(item) }}% Off
                                             </p>
                                             <p class="text-2xl font-bold text-black text-right">
-                                                {{ item.selling_price }}
+                                                {{ getItemDisplayPrice(item) }}
                                                 LKR
                                             </p>
                                         </div>
@@ -277,11 +302,19 @@
                             </div>
 
                             <div class="flex items-center justify-between w-full px-8 pt-4 pb-4 border-b border-black">
-                                <p class="text-xl text-black">Cash</p>
+                                <p class="text-xl text-black">Current Paid</p>
                                 <span>
                                     <CurrencyInput v-model="cash" :options="{ currency: 'EUR' }" />
                                     <span class="ml-2">LKR</span>
                                 </span>
+                            </div>
+                            <div v-if="props.loadedSale" class="flex items-center justify-between w-full px-8 pt-4 pb-4 border-b border-black">
+                                <p class="text-xl text-black">Advance Paid</p>
+                                <p>{{ previouslyPaid }} LKR</p>
+                            </div>
+                            <div v-if="props.loadedSale" class="flex items-center justify-between w-full px-8 pt-4 pb-4 border-b border-black">
+                                <p class="text-xl text-black">Remaining Balance</p>
+                                <p>{{ remainingBalance }} LKR</p>
                             </div>
                             <div class="flex items-center justify-between w-full px-8 pt-4">
                                 <p class="text-3xl text-black">{{ totalLabel }}</p>
@@ -318,6 +351,13 @@
                         </div>
 
                         <div class="flex flex-col w-full space-y-8">
+                            <div class="flex items-center justify-between w-full px-8 pt-4 pb-4 border-b border-black">
+                                <label class="flex items-center space-x-3 text-xl text-black">
+                                    <input type="checkbox" v-model="isCredit" class="w-5 h-5 text-blue-600 rounded" />
+                                    <span>Credit Bill</span>
+                                </label>
+                                <span class="text-sm text-gray-600">Credit mode keeps inventory updated immediately while payments post to finance separately.</span>
+                            </div>
                             <div class="flex items-center justify-center w-full pt-8 space-x-8">
                                 <p class="text-xl text-black">Payment Method :</p>
                                 <div @click="selectedPaymentMethod = 'cash'" :class="[
@@ -357,15 +397,20 @@
             </div>
         </div>
     </div>
-    <PosSuccessModel :open="isSuccessModalOpen" @update:open="handleModalOpenUpdate" :products="products"
-        :employee="employee" :cashier="loggedInUser" :customer="customer" :orderid="displayOrderId" :cash="cash"
-        :balance="balance" :subTotal="subtotal" :totalDiscount="totalDiscount" :total="total"
-        :payment-method="selectedPaymentMethod"
-        :is-return-exchange="isExchangeReturn"
-        :return-order-id="returnSale?.order_id || ''"
-        :exchange-credit="exchangeCredit"
-        :custom_discount_type="custom_discount_type"
-        :custom_discount="custom_discount" />
+    <PosSuccessModel :open="isSuccessModalOpen" @update:open="handleModalOpenUpdate" :products="receiptData.products"
+        :employee="employee" :cashier="loggedInUser" :customer="receiptData.customer" :orderid="receiptData.orderid" :cash="receiptData.cash"
+        :balance="receiptData.balance" :subTotal="receiptData.subTotal" :totalDiscount="receiptData.totalDiscount" :total="receiptData.total"
+        :payment-method="receiptData.paymentMethod"
+        :is-credit-bill="receiptData.isCreditBill"
+        :previously-paid="receiptData.previouslyPaid"
+        :current-paid="receiptData.currentPaid"
+        :remaining-balance="receiptData.remainingBalance"
+        :is-return-exchange="receiptData.isReturnExchange"
+        :return-order-id="receiptData.returnOrderId"
+        :exchange-credit="receiptData.exchangeCredit"
+        :custom_discount_type="receiptData.custom_discount_type"
+        :custom_discount="receiptData.custom_discount"
+        :sale-type="receiptData.sale_type" />
     <AlertModel v-model:open="isAlertModalOpen" :message="message" />
 
     <SelectProductModel v-model:open="isSelectModalOpen" :allcategories="allcategories" :colors="colors" :sizes="sizes"
@@ -417,6 +462,7 @@ const returnType = ref("cash_return");
 const exchangeCredit = ref(0);
 const exchangeReturnItems = ref([]);
 const returnReceiptProducts = ref([]);
+const sale_type = ref('retail');
 const isExchangeReturn = computed(() => {
     return isReturnMode.value && returnType.value === "product_return";
 });
@@ -425,6 +471,9 @@ const isReturnCashMode = computed(() => {
 });
 const confirmButtonLabel = computed(() => {
     if (!isReturnMode.value) {
+        if (props.loadedSale) {
+            return "Confirm Payment";
+        }
         return "Confirm Order";
     }
 
@@ -444,6 +493,10 @@ const totalLabel = computed(() => {
 const displayOrderId = computed(() => {
     if (isReturnCashMode.value && returnSale.value?.order_id) {
         return returnSale.value.order_id;
+    }
+
+    if (props.loadedSale?.order_id) {
+        return props.loadedSale.order_id;
     }
 
     return orderid.value;
@@ -470,9 +523,27 @@ const props = defineProps({
     loggedInUser: Object, // Using backend product name to avoid messing with selected products
     allcategories: Array,
     allemployee: Array,
+    initialProducts: Array,
+    loadedSale: Object,
+    loadedSaleDue: Number,
     colors: Array,
     sizes: Array,
 });
+
+const getPaymentMethodFromLoaded = (method) => {
+    if (!method) return 'cash';
+    const normalized = String(method).toLowerCase();
+    if (normalized.includes('card')) return 'card';
+    if (normalized.includes('online')) return 'online';
+    return 'cash';
+};
+
+const isCredit = ref(Boolean(props.loadedSale) || props.loadedSale?.is_credit || false);
+products.value = props.initialProducts || [];
+cash.value = props.loadedSale ? Number(props.loadedSaleDue || 0) : 0;
+
+const previouslyPaid = computed(() => Number(props.loadedSale?.paid_amount || 0).toFixed(2));
+const currentPaid = computed(() => Number(cash.value || 0).toFixed(2));
 
 const discount = ref(0);
 
@@ -483,9 +554,18 @@ const customer = ref({
     email: "",
 });
 
+if (props.loadedSale?.customer) {
+    customer.value = {
+        name: props.loadedSale.customer.name || "",
+        countryCode: "",
+        contactNumber: props.loadedSale.customer.phone || "",
+        email: props.loadedSale.customer.email || "",
+    };
+}
+
 const employee_id = ref("");
 
-const selectedPaymentMethod = ref("cash");
+const selectedPaymentMethod = ref(getPaymentMethodFromLoaded(props.loadedSale?.payment_method));
 
 const refreshData = () => {
     router.visit(route("pos.index"), {
@@ -494,7 +574,77 @@ const refreshData = () => {
     });
 };
 
+const receiptData = ref({
+    products: [],
+    customer: { name: '', countryCode: '', contactNumber: '', email: '' },
+    cash: 0,
+    balance: 0,
+    subTotal: '0.00',
+    totalDiscount: '0.00',
+    total: '0.00',
+    paymentMethod: 'cash',
+    isCreditBill: false,
+    previouslyPaid: '0.00',
+    currentPaid: '0.00',
+    remainingBalance: '0.00',
+    orderid: '',
+    custom_discount: 0,
+    custom_discount_type: 'percent',
+    sale_type: 'retail',
+    isReturnExchange: false,
+    returnOrderId: '',
+    exchangeCredit: 0,
+});
+
+const captureReceiptData = () => {
+    receiptData.value = {
+        products: products.value.map((item) => ({ ...item })),
+        customer: { ...customer.value },
+        cash: cash.value,
+        balance: balance.value,
+        subTotal: subtotal.value,
+        totalDiscount: totalDiscount.value,
+        total: total.value,
+        paymentMethod: selectedPaymentMethod.value,
+        isCreditBill: isCredit.value,
+        previouslyPaid: previouslyPaid.value,
+        currentPaid: currentPaid.value,
+        remainingBalance: remainingBalance.value,
+        orderid: displayOrderId.value,
+        custom_discount: custom_discount.value,
+        custom_discount_type: custom_discount_type.value,
+        sale_type: sale_type.value,
+        isReturnExchange: isExchangeReturn.value,
+        returnOrderId: returnSale.value?.order_id || '',
+        exchangeCredit: exchangeCredit.value,
+    };
+};
+
+const clearOrderState = () => {
+    products.value = [];
+    cash.value = 0;
+    customer.value = { name: '', countryCode: '', contactNumber: '', email: '' };
+    employee_id.value = '';
+    appliedCoupon.value = null;
+    couponForm.code = '';
+    form.barcode = '';
+    error.value = null;
+    custom_discount.value = 0;
+    custom_discount_type.value = 'percent';
+    isCredit.value = false;
+    selectedPaymentMethod.value = 'cash';
+    returnSale.value = null;
+    isReturnMode.value = false;
+    returnType.value = 'cash_return';
+    exchangeCredit.value = 0;
+    returnReceiptProducts.value = [];
+    exchangeReturnItems.value = [];
+};
+
 const removeProduct = (id) => {
+    if (props.loadedSale) {
+        return;
+    }
     products.value = products.value.filter((item) => item.id !== id);
 };
 
@@ -504,6 +654,9 @@ const removeCoupon = () => {
 };
 
 const incrementQuantity = (id) => {
+    if (props.loadedSale) {
+        return;
+    }
     const product = products.value.find((item) => item.id === id);
     if (product) {
         product.quantity += 1;
@@ -511,6 +664,9 @@ const incrementQuantity = (id) => {
 };
 
 const decrementQuantity = (id) => {
+    if (props.loadedSale) {
+        return;
+    }
     const product = products.value.find((item) => item.id === id);
     if (product && product.quantity > 1) {
         product.quantity -= 1;
@@ -538,9 +694,21 @@ const submitOrder = async () => {
 
     // if (window.confirm("Are you sure you want to confirm the order?")) {
     console.log(products.value);
-    if (balance.value < 0) {
+    const requiredCash = props.loadedSale ? Number(props.loadedSaleDue || 0) : Number(total.value);
+    if (
+        selectedPaymentMethod.value === "cash" &&
+        !isCredit.value &&
+        requiredCash > 0 &&
+        Number(cash.value) < requiredCash
+    ) {
         isAlertModalOpen.value = true;
         message.value = "Cash is not enough";
+        return;
+    }
+
+    if (isCredit.value && (!customer.value.name.trim() || !customer.value.contactNumber.trim())) {
+        isAlertModalOpen.value = true;
+        message.value = "Customer name and contact number are required for credit bills.";
         return;
     }
     try {
@@ -552,9 +720,14 @@ const submitOrder = async () => {
             userId: props.loggedInUser.id,
             orderid: orderid.value,
             cash: cash.value,
+            is_credit: isCredit.value,
+            sale_id: props.loadedSale?.id || null,
             custom_discount: custom_discount.value,
             custom_discount_type: custom_discount_type.value,
+            sale_type: sale_type.value,
         });
+        captureReceiptData();
+        clearOrderState();
         isSuccessModalOpen.value = true;
         console.log(response.data); // Handle success
     } catch (error) {
@@ -633,8 +806,10 @@ const submitReturnOrder = async () => {
                 cash: cash.value,
                 custom_discount: custom_discount.value,
                 custom_discount_type: custom_discount_type.value,
+                sale_type: sale_type.value,
             });
-
+            captureReceiptData();
+            clearOrderState();
             isSuccessModalOpen.value = true;
             return;
         }
@@ -650,23 +825,22 @@ const submitReturnOrder = async () => {
 const subtotal = computed(() => {
     return products.value
         .reduce(
-            (total, item) => total + parseFloat(item.selling_price) * item.quantity,
+            (total, item) => total + parseFloat(getItemBasePrice(item)) * item.quantity,
             0
         )
-        .toFixed(2); // Ensures two decimal places
+        .toFixed(2);
 });
 
 const totalDiscount = computed(() => {
     const productDiscount = products.value.reduce((total, item) => {
-        // Check if item has a discount
-        if (item.discount && item.discount > 0 && item.apply_discount == true) {
-            const discountAmount =
-                (parseFloat(item.selling_price) - parseFloat(item.discounted_price)) *
-                item.quantity;
+        const basePrice = parseFloat(getItemBasePrice(item));
+        const finalPrice = parseFloat(getItemDisplayPrice(item));
+        if (item.apply_discount == true && basePrice > finalPrice) {
+            const discountAmount = (basePrice - finalPrice) * item.quantity;
             return total + discountAmount;
         }
-        return total; // If no discount, return total as-is
-    }, 0); // Ensures two decimal places
+        return total;
+    }, 0);
 
     const couponDiscount = appliedCoupon.value
         ? Number(appliedCoupon.value.discount)
@@ -703,11 +877,23 @@ const total = computed(() => {
     return baseTotal.toFixed(2);
 });
 
+const remainingBalance = computed(() => {
+    const totalValue = Number(total.value || 0);
+    const previous = Number(props.loadedSale?.paid_amount || 0);
+    const current = Number(cash.value || 0);
+    return Math.max(0, totalValue - previous - current).toFixed(2);
+});
+
 const balance = computed(() => {
-    if (cash.value == null || cash.value === 0) {
-        return 0; // If cash.value is null or 0, return 0
+    const cashValue = Number(cash.value || 0);
+    if (props.loadedSale) {
+        const dueValue = Number(props.loadedSaleDue || 0);
+        return Math.max(0, cashValue - dueValue).toFixed(2);
     }
-    return (parseFloat(cash.value) - parseFloat(total.value)).toFixed(2);
+    if (!cash.value) {
+        return 0;
+    }
+    return (cashValue - Number(total.value)).toFixed(2);
 });
 // Check for product or handle errors
 const form = useForm({
@@ -783,10 +969,15 @@ const submitBarcode = async () => {
                 existingProduct.quantity += 1;
             } else {
                 // If it doesn't exist, add it to the products array with quantity 1
+                let defaultBatchId = null;
+                if (fetchedProduct.batches && fetchedProduct.batches.length > 0) {
+                    defaultBatchId = fetchedProduct.batches[0].id;
+                }
                 products.value.push({
                     ...fetchedProduct,
                     quantity: 1,
                     apply_discount: false, // Add the new attribute
+                    selected_batch_id: defaultBatchId,
                 });
             }
 
@@ -870,11 +1061,16 @@ const handleSelectedProducts = (selectedProducts) => {
             // If the product exists, increment its quantity
             existingProduct.quantity += 1;
         } else {
+            let defaultBatchId = null;
+            if (fetchedProduct.batches && fetchedProduct.batches.length > 0) {
+                defaultBatchId = fetchedProduct.batches[0].id;
+            }
             // If the product doesn't exist, add it with a default quantity
             products.value.push({
                 ...fetchedProduct,
                 quantity: 1,
                 apply_discount: false, // Default additional attribute
+                selected_batch_id: defaultBatchId,
             });
         }
     });
@@ -949,4 +1145,55 @@ const handleApplyReturnItems = ({ sale, products: selectedProducts, refundTotal,
 //   form.barcode = productName; // Set the selected product name to the barcode field
 //   searchTerm.value = ""; // Clear the search term after selection
 // };
+
+const getSelectedBatch = (item) => {
+    if (item.selected_batch_id && item.batches) {
+        return item.batches.find(b => b.id === item.selected_batch_id) || item;
+    }
+    return item;
+};
+
+/**
+ * Helper: Get the display price for a cart item based on the current sale_type.
+ * Returns the base (non-discounted) price for the selected pricing tier.
+ */
+const getItemBasePrice = (item) => {
+    const target = getSelectedBatch(item);
+    if (sale_type.value === 'wholesale') {
+        return target.wholesale_price || target.retail_price || 0;
+    }
+    return target.retail_price || target.selling_price || 0;
+};
+
+/**
+ * Helper: Get the discount percentage for a cart item based on the current sale_type.
+ */
+const getItemDiscountPercent = (item) => {
+    const target = getSelectedBatch(item);
+    if (sale_type.value === 'wholesale') {
+        return parseFloat(target.wholesale_discount || 0);
+    }
+    return parseFloat(target.retail_discount || target.discount || 0);
+};
+
+/**
+ * Helper: Get the effective selling price for a cart item.
+ * If a discount is applied and a discounted price exists, use that.
+ * Otherwise, use the base price for the selected pricing tier.
+ */
+const getItemDisplayPrice = (item) => {
+    const base = getItemBasePrice(item);
+    const target = getSelectedBatch(item);
+    if (sale_type.value === 'wholesale') {
+        if (item.apply_discount && target.wholesale_discount > 0 && target.discounted_wholesale_price > 0) {
+            return target.discounted_wholesale_price;
+        }
+        return base;
+    }
+    // Retail
+    if (item.apply_discount && target.retail_discount > 0 && target.discounted_retail_price > 0) {
+        return target.discounted_retail_price;
+    }
+    return base;
+};
 </script>

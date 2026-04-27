@@ -27,7 +27,7 @@
           leave-to="opacity-0 scale-95"
         >
           <DialogPanel
-            class="bg-black border-4 border-blue-600 rounded-[20px] shadow-xl w-5/6 lg:w-3/6 p-10 text-center"
+            class="bg-black border-4 border-blue-600 rounded-[20px] shadow-xl w-5/6 lg:w-3/6 p-10 text-center max-h-[90vh] overflow-y-auto"
           >
             <p v-if="successMessage" class="text-lg text-green-400 mt-2">
               {{ successMessage }}
@@ -503,60 +503,90 @@
                     </span>
                   </div>
                 </div>
-                <div class="flex items-center gap-8 mt-6">
-                  <div class="w-full">
-                    <label
-                      for="selling_price"
-                      class="block text-sm font-medium text-gray-300"
-                      >Selling Price:</label
-                    >
-                    <input
-                      type="text"
-                      id="selling_price"
-                      v-model="form.selling_price"
-                      class="w-full px-4 py-2 mt-2 text-black bg-white rounded-md focus:outline-none focus:ring focus:ring-blue-600"
-                      placeholder="Enter selling price"
-                      @blur="updateDiscountedPrice"
-                      required
-                    />
-                    <span
-                      v-if="form.errors.selling_price"
-                      class="mt-2 text-red-500"
-                    >
-                      {{ form.errors.selling_price }}
-                    </span>
+                <div class="mt-6">
+                  <h3 class="mb-4 text-md font-bold text-gray-300 border-b border-gray-600 pb-2">Retail Pricing</h3>
+                  <div class="flex items-center gap-8">
+                    <div class="w-full">
+                      <label for="retail_price" class="block text-sm font-medium text-gray-300">Retail Price:</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        id="retail_price"
+                        v-model="form.retail_price"
+                        class="w-full px-4 py-2 mt-2 text-black bg-white rounded-md focus:outline-none focus:ring focus:ring-blue-600"
+                        placeholder="Enter retail price"
+                        @blur="updateRetailDiscountedPrice"
+                        required
+                      />
+                      <span v-if="form.errors.retail_price" class="mt-2 text-red-500">{{ form.errors.retail_price }}</span>
+                    </div>
+                    <div class="w-full">
+                      <label for="retail_discount" class="block text-sm font-medium text-gray-300">Discount (%):</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        id="retail_discount"
+                        v-model="form.retail_discount"
+                        @blur="updateRetailDiscountedPrice"
+                        class="w-full px-4 py-2 mt-2 text-black bg-white rounded-md focus:outline-none focus:ring focus:ring-blue-600"
+                        placeholder="Enter discount percentage"
+                      />
+                    </div>
+                    <div class="w-full">
+                      <label for="discounted_retail_price" class="block text-sm font-medium text-gray-300">Discounted Price:</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        id="discounted_retail_price"
+                        v-model="form.discounted_retail_price"
+                        @blur="updateRetailDiscount"
+                        class="w-full px-4 py-2 mt-2 text-black bg-white rounded-md focus:outline-none focus:ring focus:ring-blue-600"
+                        placeholder="Discounted price will appear here"
+                      />
+                    </div>
                   </div>
-                  <div class="w-full">
-                    <label
-                      for="discount"
-                      class="block text-sm font-medium text-gray-300"
-                    >
-                      Discount (%):
-                    </label>
-                    <input
-                      type="text"
-                      id="discount"
-                      v-model="form.discount"
-                      @blur="updateDiscountedPrice"
-                      class="w-full px-4 py-2 mt-2 text-black bg-white rounded-md focus:outline-none focus:ring focus:ring-blue-600"
-                      placeholder="Enter discount percentage"
-                    />
-                  </div>
-                  <div class="w-full">
-                    <label
-                      for="discounted_price"
-                      class="block text-sm font-medium text-gray-300"
-                    >
-                      Discounted Price:
-                    </label>
-                    <input
-                      type="text"
-                      id="discounted_price"
-                      v-model="form.discounted_price"
-                      @blur="updateDiscount"
-                      class="w-full px-4 py-2 mt-2 text-black bg-white rounded-md focus:outline-none focus:ring focus:ring-blue-600"
-                      placeholder="Discounted price will appear here"
-                    />
+                </div>
+
+                <div class="mt-6">
+                  <h3 class="mb-4 text-md font-bold text-gray-300 border-b border-gray-600 pb-2">Wholesale Pricing</h3>
+                  <div class="flex items-center gap-8">
+                    <div class="w-full">
+                      <label for="wholesale_price" class="block text-sm font-medium text-gray-300">Wholesale Price:</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        id="wholesale_price"
+                        v-model="form.wholesale_price"
+                        class="w-full px-4 py-2 mt-2 text-black bg-white rounded-md focus:outline-none focus:ring focus:ring-blue-600"
+                        placeholder="Enter wholesale price"
+                        @blur="updateWholesaleDiscountedPrice"
+                      />
+                      <span v-if="form.errors.wholesale_price" class="mt-2 text-red-500">{{ form.errors.wholesale_price }}</span>
+                    </div>
+                    <div class="w-full">
+                      <label for="wholesale_discount" class="block text-sm font-medium text-gray-300">Discount (%):</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        id="wholesale_discount"
+                        v-model="form.wholesale_discount"
+                        @blur="updateWholesaleDiscountedPrice"
+                        class="w-full px-4 py-2 mt-2 text-black bg-white rounded-md focus:outline-none focus:ring focus:ring-blue-600"
+                        placeholder="Enter discount percentage"
+                      />
+                    </div>
+                    <div class="w-full">
+                      <label for="discounted_wholesale_price" class="block text-sm font-medium text-gray-300">Discounted Price:</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        id="discounted_wholesale_price"
+                        v-model="form.discounted_wholesale_price"
+                        @blur="updateWholesaleDiscount"
+                        class="w-full px-4 py-2 mt-2 text-black bg-white rounded-md focus:outline-none focus:ring focus:ring-blue-600"
+                        placeholder="Discounted price will appear here"
+                      />
+                    </div>
                   </div>
                 </div>
                 <div class="flex items-center gap-8 mt-6">
@@ -657,9 +687,12 @@ const form = useForm({
   size_id: "",
   color_id: "",
   cost_price: null,
-  discount: 0,
-  discounted_price: null,
-  selling_price: null,
+  retail_price: null,
+  retail_discount: 0,
+  discounted_retail_price: null,
+  wholesale_price: null,
+  wholesale_discount: 0,
+  discounted_wholesale_price: null,
   stock_quantity: null,
   barcode: "",
   image: null, // For file upload
@@ -707,22 +740,44 @@ function limitToTwoDecimals(value) {
   return match ? parseFloat(match[0]) : value;
 }
 
-// Function to update discounted price based on selling price and discount
-function updateDiscountedPrice() {
-  if (form.selling_price && form.discount) {
-    const discountAmount = (form.selling_price * form.discount) / 100;
-    form.discounted_price = limitToTwoDecimals(
-      form.selling_price - discountAmount
+// Retail Price Logic
+function updateRetailDiscountedPrice() {
+  if (form.retail_price && form.retail_discount) {
+    const discountAmount = (form.retail_price * form.retail_discount) / 100;
+    form.discounted_retail_price = limitToTwoDecimals(
+      form.retail_price - discountAmount
+    );
+  } else {
+      form.discounted_retail_price = null;
+  }
+}
+
+function updateRetailDiscount() {
+  if (form.retail_price && form.discounted_retail_price) {
+    const discountAmount = form.retail_price - form.discounted_retail_price;
+    form.retail_discount = limitToTwoDecimals(
+      (discountAmount / form.retail_price) * 100
     );
   }
 }
 
-// Function to update discount based on selling price and discounted price
-function updateDiscount() {
-  if (form.selling_price && form.discounted_price) {
-    const discountAmount = form.selling_price - form.discounted_price;
-    form.discount = limitToTwoDecimals(
-      (discountAmount / form.selling_price) * 100
+// Wholesale Price Logic
+function updateWholesaleDiscountedPrice() {
+  if (form.wholesale_price && form.wholesale_discount) {
+    const discountAmount = (form.wholesale_price * form.wholesale_discount) / 100;
+    form.discounted_wholesale_price = limitToTwoDecimals(
+      form.wholesale_price - discountAmount
+    );
+  } else {
+      form.discounted_wholesale_price = null;
+  }
+}
+
+function updateWholesaleDiscount() {
+  if (form.wholesale_price && form.discounted_wholesale_price) {
+    const discountAmount = form.wholesale_price - form.discounted_wholesale_price;
+    form.wholesale_discount = limitToTwoDecimals(
+      (discountAmount / form.wholesale_price) * 100
     );
   }
 }
