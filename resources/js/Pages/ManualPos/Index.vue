@@ -507,6 +507,10 @@ const openPrintSlip = () => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Receipt</title>
         <style>
+          @page {
+            size: 80mm auto;
+            margin: 0;
+          }
             @media print {
                 body {
                     margin: 0;
@@ -519,9 +523,14 @@ const openPrintSlip = () => {
                 font-size: 12px;
                 font-family: 'Arial', sans-serif;
                 margin: 0;
-                padding: 10px;
+            width: 80mm;
+            padding: 10px 5mm;
                 color: #000;
             }
+          .receipt-container {
+            width: 80mm;
+            box-sizing: border-box;
+          }
             .header {
                 text-align: center;
                 margin-bottom: 16px;
@@ -690,9 +699,8 @@ const openPrintSlip = () => {
           </div>
           
           <div class="footer">
-              <p>THANK YOU COME AGAIN</p>
-              <p class="italic">Let the quality define its own standards</p>
-              <p style="font-weight: bold;">Powered by JAAN Network (Pvt) Ltd.</p>
+              <p>Thank you for choosing NP Motors. Ride Safe!</p>
+              <p style="font-weight: bold;">Powered by JAAN Network</p>
           </div>
         </div>
       </body>

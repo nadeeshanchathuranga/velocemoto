@@ -400,29 +400,35 @@
 
                 <div class="flex items-center gap-8 mt-6">
                   <div class="w-full">
-                    <label class="block text-sm font-medium text-gray-300"
+                    <label
+                      for="barcode"
+                      class="block text-sm font-medium text-gray-300"
                       >Barcode:</label
                     >
                     <input
                       v-model="form.barcode"
                       type="text"
                       id="barcode"
-                      readonly
-                      class="w-full px-4 py-2 mt-2 text-gray-400 bg-gray-800 rounded-md cursor-not-allowed border border-gray-600"
+                      placeholder="Enter Barcode"
+                      class="w-full px-4 py-2 mt-2 text-black bg-white rounded-md focus:outline-none focus:ring focus:ring-blue-600"
                     />
+                    <span v-if="form.errors.barcode" class="mt-4 text-red-500">
+                      {{ form.errors.barcode }}
+                    </span>
                   </div>
                 </div>
 
                 <div class="flex items-center gap-8 mt-6" v-if="isPharma">
                   <div class="w-full">
-                    <label class="block text-sm font-medium text-gray-300"
+                    <label
+                      for="expire_date_pharma"
+                      class="block text-sm font-medium text-gray-300"
                       >Expire Date:</label
                     >
                     <input
                       v-model="form.expire_date"
                       type="date"
-                      id="barcode"
-                      placeholder="Enter Barcode"
+                      id="expire_date_pharma"
                       class="w-full px-4 py-2 mt-2 text-black rounded-md focus:outline-none focus:ring focus:ring-blue-600"
                     />
                     <span
